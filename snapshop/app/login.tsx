@@ -15,8 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import AnimatedButton from '../components/AnimatedButton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_URL = Platform.OS === 'web' ? 'http://localhost:8080/api/v1' : 'http://localhost:8080/api/v1';
+import { API_URL } from '../constants/api';
 
 export default function LoginScreen() {
     const router = useRouter();

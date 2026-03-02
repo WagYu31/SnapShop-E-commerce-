@@ -17,12 +17,12 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../../constants/theme';
 import { categories, banners, products as staticProducts } from '../../constants/data';
+import { API_URL, API_HOST_URL } from '../../constants/api';
 import AnimatedCard from '../../components/AnimatedCard';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48 - 12) / 2;
-const API_URL = 'http://localhost:8080/api/v1';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<any[]>(staticProducts);
 
   useEffect(() => {
-    console.log('[SnapShop] Fetching products from API...');
+    console.log('[SnapShop] Fetching products from:', API_URL);
     fetch(`${API_URL}/products?limit=50`)
       .then(r => r.json())
       .then(res => {
@@ -45,7 +45,7 @@ export default function HomeScreen() {
             name: p.name,
             price: p.price,
             oldPrice: p.old_price,
-            image: p.image_url?.startsWith('/') ? `http://localhost:8080${p.image_url}` : p.image_url,
+            image: p.image_url?.startsWith('/') ? `${API_HOST_URL}${p.image_url}` : p.image_url,
             category: p.category?.name || 'All',
             rating: p.rating,
             reviews: p.review_count,
