@@ -19,6 +19,11 @@ function Login({ onLogin }) {
     e.preventDefault(); setError(''); setLoading(true)
     try {
       const res = await api.login(email, password)
+      if (res.data.user.role === 'customer') {
+        setError('Customers cannot access the admin dashboard. Please use the mobile app.')
+        setLoading(false)
+        return
+      }
       api.setToken(res.data.token)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       onLogin(res.data.user)
