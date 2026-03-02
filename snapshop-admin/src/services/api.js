@@ -40,8 +40,8 @@ class ApiService {
     createProduct(data) { return this.request('POST', '/admin/products', data); }
     uploadImage(file) {
         const formData = new FormData();
-        formData.append('image', file);
-        return fetch(`${this.base}/admin/upload`, {
+        formData.append('file', file);
+        return fetch(`${API_URL}/admin/upload`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${this.token}` },
             body: formData
