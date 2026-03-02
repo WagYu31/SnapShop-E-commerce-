@@ -1,6 +1,6 @@
 # 🛍️ SnapShop E-commerce Platform
 
-A **full-stack e-commerce platform** with a React Native mobile app, Golang REST API backend, and React admin dashboard. Built with modern architecture, role-based access control, and ERP modules for complete business management.
+A **full-stack e-commerce platform** with a React Native mobile app, Golang REST API backend (modular monolith architecture), and React admin dashboard. Built with Docker, PostgreSQL, role-based access control (6-level RBAC), and ERP modules for complete business management.
 
 ---
 
@@ -34,17 +34,38 @@ SnapShop is a complete e-commerce solution consisting of three applications:
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │   Admin Dashboard │     │   REST API      │
-│  (React Native) │────▶│   (React + Vite)  │────▶│  (Golang + Gin) │
-│   Expo SDK 52   │     │   Port: 5174      │     │   Port: 8080    │
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
-                                                 ┌────────▼────────┐
-                                                 │    SQLite DB    │
-                                                 │  (GORM AutoMig) │
-                                                 └─────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────────────────┐
+│   Mobile App    │     │  Admin Dashboard  │     │   REST API (Modular Monolith)│
+│  (React Native) │────▶│  (React + Vite)   │────▶│   Go + Gin (Port: 8080)      │
+│   Expo SDK 52   │     │  Port: 5174       │     │                              │
+│   Port: 8082    │     │  (Docker: Nginx)  │     │  ┌─────────────────────────┐ │
+└─────────────────┘     └──────────────────┘     │  │ Gateway (router.go)     │ │
+                                                  │  └──────────┬──────────────┘ │
+                                                  │  ┌──────────▼──────────────┐ │
+                                                  │  │      10 Services        │ │
+                                                  │  │ auth │ product │ order  │ │
+                                                  │  │ user │ cart    │ wh     │ │
+                                                  │  │ commerce │ admin │ fin  │ │
+                                                  │  │ upload                  │ │
+                                                  │  └──────────┬──────────────┘ │
+                                                  └──────────────┼───────────────┘
+                                                       ┌────────▼────────┐
+                                                       │  PostgreSQL 16  │
+                                                       │  (Docker Volume)│
+                                                       └─────────────────┘
 ```
+
+### Modular Monolith Pattern
+
+The backend uses a **modular monolith** architecture: code is organized into 10 independent service packages, but runs as a single binary with a shared PostgreSQL database. This gives the clean separation of microservices without the operational complexity.
+
+| Layer | Description |
+|-------|-------------|
+| `gateway/` | Route registration — maps HTTP routes to service handlers |
+| `services/` | 10 service packages, each with its own handler |
+| `models/` | Shared database models (GORM) |
+| `middleware/` | JWT auth & RBAC middleware |
+| `database/` | DB connection, migrations, seed data |
 
 ---
 
@@ -56,9 +77,18 @@ SnapShop is a complete e-commerce solution consisting of three applications:
 | **Go 1.21+** | Programming language |
 | **Gin** | HTTP web framework |
 | **GORM** | ORM for database operations |
-| **SQLite** | Database (easily swappable to PostgreSQL/MySQL) |
+| **PostgreSQL 16** | Production database (Docker) |
 | **JWT** | Authentication tokens |
 | **bcrypt** | Password hashing |
+| **Docker** | Containerized deployment |
+
+### Infrastructure
+| Technology | Purpose |
+|-----------|---------|
+| **Docker Compose** | Multi-container orchestration |
+| **PostgreSQL 16** | Primary database |
+| **Nginx** | Admin dashboard reverse proxy |
+| **Docker volumes** | Data persistence |
 
 ### Mobile App (snapshop)
 | Technology | Purpose |
@@ -117,6 +147,7 @@ SnapShop is a complete e-commerce solution consisting of three applications:
 - JWT-based authentication with token expiry
 - bcrypt password hashing
 - Role-based access control (RBAC) with 5 levels
+- 6-level RBAC: Customer → Seller → Warehouse → Store → Admin → SuperAdmin
 - Middleware-enforced route protection
 - CORS configuration
 
@@ -139,36 +170,44 @@ SnapShop E-commerce/
 │   │   ├── login.tsx            # Authentication
 │   │   └── ...                  # Other screens
 │   ├── components/              # Reusable components
-│   ├── constants/               # Theme, mock data
+│   ├── constants/               # Theme, API config
 │   └── contexts/                # Theme context provider
 │
-├── snapshop-api/                # Golang REST API
-│   ├── main.go                  # Entry point, router setup
+├── snapshop-api/                # Golang REST API (Modular Monolith)
+│   ├── main.go                  # Entry point (simplified)
+│   ├── gateway/
+│   │   └── router.go            # 🆕 Centralized route registration
+│   ├── services/                # 🆕 10 service-based packages
+│   │   ├── auth/handler.go      # Auth Service     — Register, Login, JWT
+│   │   ├── product/handler.go   # Product Service   — List, Detail, CRUD, Categories
+│   │   ├── order/handler.go     # Order Service     — Checkout, Order list, Status
+│   │   ├── user/handler.go      # User Service      — Profile, Password, Addresses
+│   │   ├── cart/handler.go      # Cart Service      — Cart CRUD, Wishlist
+│   │   ├── warehouse/handler.go # Warehouse Service — Stock, Inbound, Store transfers
+│   │   ├── commerce/handler.go  # Commerce Service  — Vouchers, Reviews
+│   │   ├── admin/handler.go     # Admin Service     — Dashboard, Users, SuperAdmin
+│   │   ├── finance/handler.go   # Finance Service   — Reports, Procurement, P&L, CRM
+│   │   └── upload/handler.go    # Upload Service    — Image upload with compression
 │   ├── config/config.go         # App configuration
 │   ├── database/
-│   │   ├── database.go          # DB connection & migrations
+│   │   ├── database.go          # PostgreSQL connection & migrations
 │   │   └── seed.go              # Initial seed data
-│   ├── handlers/
-│   │   ├── auth.go              # Register, Login
-│   │   ├── product.go           # Product listing, detail, reviews
-│   │   ├── commerce.go          # Cart, Wishlist, Vouchers
-│   │   ├── order.go             # Checkout, Order history
-│   │   ├── user.go              # Profile, Addresses, Warehouse, Store
-│   │   ├── admin.go             # Dashboard, Product CRUD, User mgmt
-│   │   └── erp.go               # Reports, Procurement, Returns, Finance, CRM
-│   ├── middleware/auth.go       # JWT auth & role middleware
+│   ├── middleware/auth.go       # JWT auth & RBAC middleware
 │   ├── models/models.go         # All database models (GORM)
-│   └── utils/response.go       # Standardized API responses
+│   ├── utils/response.go        # Standardized API responses
+│   └── Dockerfile               # Multi-stage Go build
 │
 ├── snapshop-admin/              # React Admin Dashboard
 │   ├── src/
-│   │   ├── App.jsx              # All pages & routing (single-file)
+│   │   ├── App.jsx              # All pages & routing
 │   │   ├── index.css            # Premium dark theme CSS
 │   │   ├── main.jsx             # React entry point
 │   │   └── services/api.js      # API service layer
-│   ├── index.html               # HTML template
-│   └── vite.config.js           # Vite configuration
+│   ├── Dockerfile               # Multi-stage Node + Nginx build
+│   └── nginx.conf               # Nginx config for SPA
 │
+├── docker-compose.yml           # 🆕 Full stack orchestration
+├── uploads/                     # Uploaded product images (persistent)
 ├── .gitignore
 └── README.md
 ```
@@ -179,9 +218,8 @@ SnapShop E-commerce/
 
 ### Prerequisites
 
-- **Go** 1.21 or higher
-- **Node.js** 18 or higher
-- **npm** 9 or higher
+- **Docker** & **Docker Compose** (for backend + admin)
+- **Node.js** 18+ (for mobile app development)
 - **Expo CLI** (`npm install -g expo-cli`)
 
 ### 1. Clone the Repository
@@ -191,28 +229,26 @@ git clone https://github.com/WagYu31/SnapShop-E-commerce-.git
 cd SnapShop-E-commerce-
 ```
 
-### 2. Start the Backend API
+### 2. Start Backend + Admin (Docker)
+
+One command starts PostgreSQL, API server, and Admin dashboard:
 
 ```bash
-cd snapshop-api
-go mod tidy
-go build -o snapshop-api .
-./snapshop-api
+docker-compose up --build -d
 ```
 
-The API will start on `http://localhost:8080` with auto-seeded test data.
+| Service | URL |
+|---------|-----|
+| API | http://localhost:8080 |
+| Admin Dashboard | http://localhost:5174 |
+| PostgreSQL | localhost:5432 |
 
-### 3. Start the Admin Dashboard
-
-```bash
-cd snapshop-admin
-npm install
-npm run dev
+Health check: `curl http://localhost:8080/health`
+```json
+{"architecture": "modular-monolith", "version": "2.0.0", "status": "ok"}
 ```
 
-The dashboard will open at `http://localhost:5174`
-
-### 4. Start the Mobile App
+### 3. Start the Mobile App
 
 ```bash
 cd snapshop
@@ -228,6 +264,19 @@ npx expo start --ios
 For Android emulator:
 ```bash
 npx expo start --android
+```
+
+### Without Docker (Manual)
+
+```bash
+# Backend
+cd snapshop-api
+go mod tidy
+go run main.go
+
+# Admin
+cd snapshop-admin
+npm install && npm run dev
 ```
 
 ---
@@ -323,16 +372,17 @@ Authorization: Bearer <jwt_token>
 
 ---
 
-## User Roles
+## User Roles (6-Level RBAC)
 
 ```
-Customer → Warehouse → Store → Admin → SuperAdmin
-  (L1)       (L3)       (L4)    (L5)      (L6)
+Customer → Seller → Warehouse → Store → Admin → SuperAdmin
+  (L1)      (L2)      (L3)       (L4)    (L5)      (L6)
 ```
 
 | Role | Level | Dashboard Access | Description |
 |------|-------|-----------------|-------------|
 | **Customer** | 1 | Mobile App only | Browse, buy, review products |
+| **Seller** | 2 | Seller dashboard | Manage own products & orders |
 | **Warehouse** | 3 | Stock, Alerts, Procurement | Manage warehouse inventory & suppliers |
 | **Store** | 4 | + Store Locations | Manage physical store, receive stock transfers |
 | **Admin** | 5 | + All ERP modules | Full operational management |
