@@ -211,6 +211,7 @@ function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
@@ -250,6 +251,25 @@ function ProductsPage() {
     load()
   }
 
+  const handleEdit = (p) => {
+    setEditingId(p.id)
+    setForm({
+      name: p.name, sku: p.sku, price: String(p.price),
+      old_price: p.old_price ? String(p.old_price) : '',
+      stock: String(p.stock), category_id: String(p.category_id),
+      image_url: p.image_url || '', description: p.description || ''
+    })
+    setShowForm(true)
+    setFormError('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const resetForm = () => {
+    setForm({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
+    setEditingId(null)
+    setShowForm(false)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError('')
@@ -257,20 +277,23 @@ function ProductsPage() {
     const sku = form.sku || generateSKU(form.name, form.category_id)
     setSaving(true)
     try {
-      await api.createProduct({
-        name: form.name,
-        sku,
+      const data = {
+        name: form.name, sku,
         price: parseInt(form.price),
         old_price: form.old_price ? parseInt(form.old_price) : null,
         stock: parseInt(form.stock || '0'),
         category_id: parseInt(form.category_id),
         image_url: form.image_url,
         description: form.description,
-      })
-      setForm({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
-      setShowForm(false)
+      }
+      if (editingId) {
+        await api.updateProduct(editingId, data)
+      } else {
+        await api.createProduct(data)
+      }
+      resetForm()
       load()
-    } catch (err) { setFormError('Failed to create product: ' + (err.message || 'Unknown error')) }
+    } catch (err) { setFormError('Failed to save product: ' + (err.message || 'Unknown error')) }
     setSaving(false)
   }
 
@@ -281,7 +304,7 @@ function ProductsPage() {
         <input className="search-input" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()} />
         <button className="btn btn-accent" onClick={load}>Search</button>
         {hasAccess(user.role, 'admin') && (
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)} style={{ marginLeft: 'auto' }}>
+          <button className="btn btn-primary" onClick={() => { if (showForm) { resetForm() } else { setShowForm(true) } }} style={{ marginLeft: 'auto' }}>
             {showForm ? '✕ Cancel' : '+ Add Product'}
           </button>
         )}
@@ -289,7 +312,7 @@ function ProductsPage() {
 
       {showForm && (
         <div className="table-card" style={{ marginBottom: 20, padding: 24 }}>
-          <h3 style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>New Product</h3>
+          <h3 style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>{editingId ? '✏️ Edit Product' : 'New Product'}</h3>
           {formError && <div style={{ color: '#e74c3c', marginBottom: 12, padding: '8px 12px', background: 'rgba(231,76,60,0.1)', borderRadius: 8 }}>{formError}</div>}
           <form onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -367,8 +390,8 @@ function ProductsPage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-              <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : '✓ Save Product'}</button>
-              <button className="btn btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : editingId ? '✓ Update Product' : '✓ Save Product'}</button>
+              <button className="btn btn-outline" type="button" onClick={resetForm}>Cancel</button>
             </div>
           </form>
         </div>
@@ -387,7 +410,10 @@ function ProductsPage() {
                 <td><span className={`badge ${p.stock <= p.reorder_point ? 'low' : 'ok'}`}>{p.stock}</span></td>
                 <td>⭐ {p.rating}</td>
                 {hasAccess(user.role, 'admin') && (
-                  <td><div className="actions"><button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Delete</button></div></td>
+                  <td><div className="actions">
+                    <button className="btn btn-sm btn-outline" onClick={() => handleEdit(p)} style={{ marginRight: 6 }}>Edit</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Delete</button>
+                  </div></td>
                 )}
               </tr>
             ))}
