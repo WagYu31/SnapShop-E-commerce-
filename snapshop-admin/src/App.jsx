@@ -214,7 +214,7 @@ function ProductsPage() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-
+  const imgUrl = (url) => url?.startsWith('/') ? `http://localhost:8080${url}` : url
   const categoryPrefixes = { '1': 'ALL', '2': 'WMN', '3': 'MAN', '4': 'KID', '5': 'SHO', '6': 'BAG' }
   const categoryNames = { '1': 'All', '2': 'Woman', '3': 'Man', '4': 'Kids', '5': 'Shoes', '6': 'Bags' }
 
@@ -439,7 +439,7 @@ function ProductsPage() {
           <tbody>
             {products.map(p => (
               <tr key={p.id}>
-                <td><img className="product-img" src={p.image_url} alt={p.name} /></td>
+                <td><img className="product-img" src={imgUrl(p.image_url)} alt={p.name} /></td>
                 <td><strong>{p.name}</strong><br /><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.category?.name}</span></td>
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.sku}</td>
                 <td>{formatRp(p.price)}</td>
@@ -764,7 +764,7 @@ function ReportsPage() {
           <table><thead><tr><th>Image</th><th>Product</th><th>Sold</th><th>Revenue</th><th>Rating</th></tr></thead>
             <tbody>{topProducts.map(p => (
               <tr key={p.product_id}>
-                <td><img className="product-img" src={p.image_url} alt="" /></td>
+                <td><img className="product-img" src={imgUrl(p.image_url)} alt="" /></td>
                 <td><strong>{p.product_name}</strong><br /><span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.sku}</span></td>
                 <td><strong>{p.total_sold}</strong></td><td>{formatRp(p.total_revenue)}</td><td>⭐ {p.avg_rating}</td>
               </tr>
