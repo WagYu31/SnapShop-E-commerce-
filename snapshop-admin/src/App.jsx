@@ -208,6 +208,10 @@ function ProductsPage() {
   const [meta, setMeta] = useState(null)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [form, setForm] = useState({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '1', image_url: '', description: '' })
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   const load = () => {
@@ -224,13 +228,96 @@ function ProductsPage() {
     load()
   }
 
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setFormError('')
+    if (!form.name || !form.sku || !form.price) { setFormError('Name, SKU, and Price are required'); return }
+    setSaving(true)
+    try {
+      await api.createProduct({
+        name: form.name,
+        sku: form.sku,
+        price: parseInt(form.price),
+        old_price: form.old_price ? parseInt(form.old_price) : null,
+        stock: parseInt(form.stock || '0'),
+        category_id: parseInt(form.category_id),
+        image_url: form.image_url,
+        description: form.description,
+      })
+      setForm({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '1', image_url: '', description: '' })
+      setShowForm(false)
+      load()
+    } catch (err) { setFormError('Failed to create product: ' + (err.message || 'Unknown error')) }
+    setSaving(false)
+  }
+
   return (
     <div>
       <div className="page-header"><h1>Products</h1><p>Manage your product catalog</p></div>
       <div className="toolbar">
         <input className="search-input" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()} />
         <button className="btn btn-accent" onClick={load}>Search</button>
+        {hasAccess(user.role, 'admin') && (
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)} style={{ marginLeft: 'auto' }}>
+            {showForm ? '✕ Cancel' : '+ Add Product'}
+          </button>
+        )}
       </div>
+
+      {showForm && (
+        <div className="table-card" style={{ marginBottom: 20, padding: 24 }}>
+          <h3 style={{ margin: '0 0 16px', color: 'var(--text-primary)' }}>New Product</h3>
+          {formError && <div style={{ color: '#e74c3c', marginBottom: 12, padding: '8px 12px', background: 'rgba(231,76,60,0.1)', borderRadius: 8 }}>{formError}</div>}
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group">
+                <label>Product Name *</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Nike Air Max 90" required />
+              </div>
+              <div className="form-group">
+                <label>SKU *</label>
+                <input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="e.g. SHO-NAM-WHT-001" required />
+              </div>
+              <div className="form-group">
+                <label>Price (Rp) *</label>
+                <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="e.g. 1500000" required />
+              </div>
+              <div className="form-group">
+                <label>Old Price (Rp)</label>
+                <input type="number" value={form.old_price} onChange={e => setForm({ ...form, old_price: e.target.value })} placeholder="e.g. 2000000 (optional)" />
+              </div>
+              <div className="form-group">
+                <label>Stock</label>
+                <input type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} placeholder="e.g. 100" />
+              </div>
+              <div className="form-group">
+                <label>Category</label>
+                <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })}>
+                  <option value="1">All</option>
+                  <option value="2">Woman</option>
+                  <option value="3">Man</option>
+                  <option value="4">Kids</option>
+                  <option value="5">Shoes</option>
+                  <option value="6">Bags</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Image URL</label>
+                <input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} placeholder="https://images.unsplash.com/..." />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Description</label>
+                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description..." rows={3} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)', resize: 'vertical' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+              <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : '✓ Save Product'}</button>
+              <button className="btn btn-outline" type="button" onClick={() => setShowForm(false)}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div className="table-card">
         <table>
           <thead><tr><th>Image</th><th>Name</th><th>SKU</th><th>Price</th><th>Stock</th><th>Rating</th>{hasAccess(user.role, 'admin') && <th>Actions</th>}</tr></thead>
