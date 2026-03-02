@@ -16,7 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../../constants/theme';
-import { categories, banners } from '../../constants/data';
+import { categories, banners, products as staticProducts } from '../../constants/data';
 import AnimatedCard from '../../components/AnimatedCard';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -31,13 +31,15 @@ export default function HomeScreen() {
   const [bannerIndex, setBannerIndex] = useState(0);
   const [showNotifBanner, setShowNotifBanner] = useState(true);
   const notifAnim = useRef(new Animated.Value(-80)).current;
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>(staticProducts);
 
   useEffect(() => {
+    console.log('[SnapShop] Fetching products from API...');
     fetch(`${API_URL}/products?limit=50`)
       .then(r => r.json())
       .then(res => {
-        if (res.data) {
+        console.log('[SnapShop] API response:', res.data?.length, 'products');
+        if (res.data && res.data.length > 0) {
           setProducts(res.data.map((p: any) => ({
             id: String(p.id),
             name: p.name,
@@ -52,7 +54,7 @@ export default function HomeScreen() {
           })));
         }
       })
-      .catch(() => { });
+      .catch((err) => { console.log('[SnapShop] API fetch failed, using static data:', err.message); });
   }, []);
 
   useEffect(() => {
