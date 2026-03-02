@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -12,10 +12,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../../constants/theme';
 import { accountMenuItems } from '../../constants/data';
 import { useTheme } from '../../contexts/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
     const router = useRouter();
     const { isDark, colors } = useTheme();
+    const [user, setUser] = useState<any>(null);
+
+    useEffect(() => {
+        AsyncStorage.getItem('user').then((data) => {
+            if (data) setUser(JSON.parse(data));
+        });
+    }, []);
+
+    const handleLogout = async () => {
+        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('user');
+        router.replace('/login');
+    };
 
     return (
         <View style={[styles.container, isDark && { backgroundColor: colors.background }]}>
@@ -34,12 +48,12 @@ export default function ProfileScreen() {
                 {/* Profile Card */}
                 <View style={styles.profileCard}>
                     <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
+                        source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
                         style={styles.avatar}
                     />
                     <View style={styles.profileInfo}>
-                        <Text style={styles.profileName}>John Doe</Text>
-                        <Text style={styles.profileEmail}>john.doe@email.com</Text>
+                        <Text style={styles.profileName}>{user?.name || 'Guest'}</Text>
+                        <Text style={styles.profileEmail}>{user?.email || 'Not logged in'}</Text>
                     </View>
                     <TouchableOpacity style={styles.editButton} onPress={() => router.push('/edit-profile')}>
                         <Ionicons name="create-outline" size={18} color={Colors.primaryText} />
