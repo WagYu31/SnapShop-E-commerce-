@@ -136,9 +136,27 @@ func Seed() {
 	}
 	DB.Create(&reviews)
 
+	// Reset PostgreSQL sequences after seeding with explicit IDs
+	resetSequences()
+
 	log.Println("✅ Database seeded successfully")
 }
 
 func uintPtr(v uint) *uint {
 	return &v
+}
+
+func resetSequences() {
+	// Only needed for PostgreSQL — SQLite auto-handles rowid
+	tables := []string{
+		"users", "categories", "products", "product_variants",
+		"stock_batches", "suppliers", "stores", "store_stocks",
+		"stock_transfers", "addresses", "orders", "order_items",
+		"vouchers", "reviews", "cart_items", "wishlist_items",
+		"audit_logs", "returns", "purchase_orders", "purchase_order_items",
+	}
+	for _, table := range tables {
+		DB.Exec("SELECT setval(pg_get_serial_sequence('" + table + "', 'id'), COALESCE(MAX(id), 1)) FROM " + table)
+	}
+	log.Println("🔄 PostgreSQL sequences reset")
 }
