@@ -211,8 +211,30 @@ function ProductsPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
-  const [form, setForm] = useState({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '1', image_url: '', description: '' })
+  const [form, setForm] = useState({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
   const user = JSON.parse(localStorage.getItem('user') || '{}')
+
+  const categoryPrefixes = { '1': 'ALL', '2': 'WMN', '3': 'MAN', '4': 'KID', '5': 'SHO', '6': 'BAG' }
+  const categoryNames = { '1': 'All', '2': 'Woman', '3': 'Man', '4': 'Kids', '5': 'Shoes', '6': 'Bags' }
+
+  const generateSKU = (name, catId) => {
+    if (!name.trim()) return ''
+    const prefix = categoryPrefixes[catId] || 'ALL'
+    const words = name.trim().toUpperCase().split(/\s+/).filter(w => w.length > 0)
+    const nameCode = words.length >= 2
+      ? words.slice(0, 2).map(w => w.substring(0, 2)).join('')
+      : words[0].substring(0, 4)
+    const counter = String(products.length + 1).padStart(3, '0')
+    return `${prefix}-${nameCode}-${counter}`
+  }
+
+  const updateForm = (updates) => {
+    const newForm = { ...form, ...updates }
+    if ('name' in updates || 'category_id' in updates) {
+      newForm.sku = generateSKU(newForm.name, newForm.category_id)
+    }
+    setForm(newForm)
+  }
 
   const load = () => {
     let q = `?page=${page}&limit=20`
@@ -231,12 +253,13 @@ function ProductsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError('')
-    if (!form.name || !form.sku || !form.price) { setFormError('Name, SKU, and Price are required'); return }
+    if (!form.name || !form.price) { setFormError('Name and Price are required'); return }
+    const sku = form.sku || generateSKU(form.name, form.category_id)
     setSaving(true)
     try {
       await api.createProduct({
         name: form.name,
-        sku: form.sku,
+        sku,
         price: parseInt(form.price),
         old_price: form.old_price ? parseInt(form.old_price) : null,
         stock: parseInt(form.stock || '0'),
@@ -244,7 +267,7 @@ function ProductsPage() {
         image_url: form.image_url,
         description: form.description,
       })
-      setForm({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '1', image_url: '', description: '' })
+      setForm({ name: '', sku: '', price: '', old_price: '', stock: '', category_id: '3', image_url: '', description: '' })
       setShowForm(false)
       load()
     } catch (err) { setFormError('Failed to create product: ' + (err.message || 'Unknown error')) }
@@ -272,11 +295,14 @@ function ProductsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group">
                 <label>Product Name *</label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Nike Air Max 90" required />
+                <input value={form.name} onChange={e => updateForm({ name: e.target.value })} placeholder="e.g. Nike Air Max 90" required />
               </div>
               <div className="form-group">
-                <label>SKU *</label>
-                <input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="e.g. SHO-NAM-WHT-001" required />
+                <label>SKU <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 'normal' }}>⚡ Auto-generated</span></label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={form.sku} readOnly style={{ flex: 1, opacity: form.sku ? 1 : 0.5, cursor: 'default' }} placeholder="Type product name to generate..." />
+                  {form.name && <button type="button" className="btn btn-sm btn-outline" onClick={() => updateForm({ name: form.name })} title="Regenerate SKU">🔄</button>}
+                </div>
               </div>
               <div className="form-group">
                 <label>Price (Rp) *</label>
@@ -292,8 +318,7 @@ function ProductsPage() {
               </div>
               <div className="form-group">
                 <label>Category</label>
-                <select value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })}>
-                  <option value="1">All</option>
+                <select value={form.category_id} onChange={e => updateForm({ category_id: e.target.value })}>
                   <option value="2">Woman</option>
                   <option value="3">Man</option>
                   <option value="4">Kids</option>
