@@ -365,16 +365,40 @@ function ProductsPage() {
                       setFormError('')
                       setSaving(true)
                       try {
-                        const res = await api.uploadImage(file)
+                        // Auto-compress image using Canvas API
+                        const compressed = await new Promise((resolve) => {
+                          const reader = new FileReader()
+                          reader.onload = (ev) => {
+                            const img = new Image()
+                            img.onload = () => {
+                              const canvas = document.createElement('canvas')
+                              const MAX_SIZE = 1200
+                              let w = img.width, h = img.height
+                              if (w > MAX_SIZE || h > MAX_SIZE) {
+                                if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE }
+                                else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE }
+                              }
+                              canvas.width = w; canvas.height = h
+                              canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+                              canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8)
+                            }
+                            img.src = ev.target.result
+                          }
+                          reader.readAsDataURL(file)
+                        })
+                        const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+                        setFormError(`📦 Compressed: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(1)}MB`)
+                        const res = await api.uploadImage(compressedFile)
                         if (res.success) {
                           setForm(f => ({ ...f, image_url: res.data.url }))
+                          setFormError('')
                         } else {
                           setFormError(res.message || 'Upload failed')
                         }
-                      } catch { setFormError('Upload failed. Check file size (max 5MB)') }
+                      } catch { setFormError('Upload failed. Please try again.') }
                       setSaving(false)
                     }} style={{ padding: 8 }} />
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Max 5MB • JPG, PNG, WebP, GIF</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Any size • Auto-compressed to max 1200px JPEG</p>
                   </div>
                 )}
                 {form.image_url && (

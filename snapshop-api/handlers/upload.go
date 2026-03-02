@@ -27,9 +27,9 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
-	// Max 5MB
-	if file.Size > 5*1024*1024 {
-		c.JSON(400, gin.H{"success": false, "message": "File too large. Maximum 5MB"})
+	// Max 50MB (frontend auto-compresses, this is safety net)
+	if file.Size > 50*1024*1024 {
+		c.JSON(400, gin.H{"success": false, "message": "File too large. Maximum 50MB"})
 		return
 	}
 
