@@ -31,3 +31,4 @@ snapshop-admin/dist/
 .env
 .env.local
 .env.*.local
+uploads/
