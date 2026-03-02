@@ -11,16 +11,18 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Animated,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../../constants/theme';
-import { products, categories, banners } from '../../constants/data';
+import { categories, banners } from '../../constants/data';
 import AnimatedCard from '../../components/AnimatedCard';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48 - 12) / 2;
+const API_URL = 'http://localhost:8080/api/v1';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -29,6 +31,29 @@ export default function HomeScreen() {
   const [bannerIndex, setBannerIndex] = useState(0);
   const [showNotifBanner, setShowNotifBanner] = useState(true);
   const notifAnim = useRef(new Animated.Value(-80)).current;
+  const [products, setProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/products?limit=50`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.data) {
+          setProducts(res.data.map((p: any) => ({
+            id: String(p.id),
+            name: p.name,
+            price: p.price,
+            oldPrice: p.old_price,
+            image: p.image_url?.startsWith('/') ? `http://localhost:8080${p.image_url}` : p.image_url,
+            category: p.category?.name || 'All',
+            rating: p.rating,
+            reviews: p.review_count,
+            description: p.description,
+            stock: p.stock,
+          })));
+        }
+      })
+      .catch(() => { });
+  }, []);
 
   useEffect(() => {
     if (showNotifBanner) {
