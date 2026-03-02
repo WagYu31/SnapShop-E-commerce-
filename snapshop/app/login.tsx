@@ -40,7 +40,7 @@ export default function LoginScreen() {
             });
             const data = await res.json();
             if (!res.ok) {
-                setError(data.error || 'Invalid email or password');
+                setError(data.message || data.error || 'Invalid email or password');
                 setLoading(false);
                 return;
             }
