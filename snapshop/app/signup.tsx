@@ -13,6 +13,9 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import AnimatedButton from '../components/AnimatedButton';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = Platform.OS === 'web' ? 'http://localhost:8080/api/v1' : 'http://localhost:8080/api/v1';
 
 export default function SignUpScreen() {
     const router = useRouter();
@@ -21,6 +24,41 @@ export default function SignUpScreen() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [agreed, setAgreed] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSignUp = async () => {
+        setError('');
+        if (!name.trim()) { setError('Please enter your name'); return; }
+        if (!email.trim()) { setError('Please enter your email'); return; }
+        if (!password.trim()) { setError('Please enter your password'); return; }
+        if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
+        if (!agreed) { setError('Please agree to the Terms & Privacy Policy'); return; }
+
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.error || 'Registration failed. Please try again.');
+                setLoading(false);
+                return;
+            }
+            // Auto-login after register
+            await AsyncStorage.setItem('token', data.data.token);
+            await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
+            router.replace('/(tabs)');
+        } catch (err) {
+            setError('Cannot connect to server. Please try again.');
+        }
+        setLoading(false);
+    };
+
+    const clearError = () => { if (error) setError(''); };
 
     return (
         <KeyboardAvoidingView
@@ -34,7 +72,7 @@ export default function SignUpScreen() {
             >
                 <View style={styles.headerSection}>
                     <Text style={styles.titleText}>Create Your Account</Text>
-                    <Text style={styles.subtitleText}>Which part of country that you call home?</Text>
+                    <Text style={styles.subtitleText}>Join SnapShop and start shopping!</Text>
                 </View>
 
                 <View style={styles.formSection}>
@@ -46,7 +84,7 @@ export default function SignUpScreen() {
                                 placeholder="Enter your name"
                                 placeholderTextColor={Colors.gray}
                                 value={name}
-                                onChangeText={setName}
+                                onChangeText={(t) => { setName(t); clearError(); }}
                             />
                         </View>
                     </View>
@@ -59,7 +97,7 @@ export default function SignUpScreen() {
                                 placeholder="Enter your email"
                                 placeholderTextColor={Colors.gray}
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(t) => { setEmail(t); clearError(); }}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
@@ -74,7 +112,7 @@ export default function SignUpScreen() {
                                 placeholder="Enter your password"
                                 placeholderTextColor={Colors.gray}
                                 value={password}
-                                onChangeText={setPassword}
+                                onChangeText={(t) => { setPassword(t); clearError(); }}
                                 secureTextEntry={!showPassword}
                             />
                             <TouchableOpacity
@@ -92,7 +130,7 @@ export default function SignUpScreen() {
 
                     <TouchableOpacity
                         style={styles.checkboxRow}
-                        onPress={() => setAgreed(!agreed)}
+                        onPress={() => { setAgreed(!agreed); clearError(); }}
                     >
                         <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
                             {agreed && <Ionicons name="checkmark" size={14} color={Colors.white} />}
@@ -101,6 +139,8 @@ export default function SignUpScreen() {
                             I agree to the <Text style={styles.linkText}>Terms & Privacy Policy</Text>
                         </Text>
                     </TouchableOpacity>
+
+                    {error ? <Text style={{ color: '#e74c3c', fontSize: 14, marginBottom: 16, textAlign: 'center' }}>{error}</Text> : null}
 
                     <View style={styles.socialSection}>
                         <AnimatedButton
@@ -138,9 +178,9 @@ export default function SignUpScreen() {
                     </View>
 
                     <AnimatedButton
-                        onPress={() => router.replace('/(tabs)')}
-                        title="Sign Up"
-                        style={styles.signUpButton}
+                        onPress={handleSignUp}
+                        title={loading ? 'Creating account...' : 'Sign Up'}
+                        style={loading ? { ...styles.signUpButton, opacity: 0.7 } : styles.signUpButton}
                         textStyle={styles.signUpButtonText}
                     />
 
