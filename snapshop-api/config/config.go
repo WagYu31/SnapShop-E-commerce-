@@ -3,9 +3,9 @@ package config
 import "os"
 
 type Config struct {
-	Port      string
-	DBPath    string
-	JWTSecret string
+	Port        string
+	DatabaseURL string
+	JWTSecret   string
 }
 
 func Load() *Config {
@@ -13,17 +13,17 @@ func Load() *Config {
 	if port == "" {
 		port = "8080"
 	}
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "snapshop.db"
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "sqlite://snapshop.db"
 	}
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "snapshop-secret-key-change-in-production-2026"
 	}
 	return &Config{
-		Port:      port,
-		DBPath:    dbPath,
-		JWTSecret: jwtSecret,
+		Port:        port,
+		DatabaseURL: dbURL,
+		JWTSecret:   jwtSecret,
 	}
 }
