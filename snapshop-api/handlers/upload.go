@@ -13,7 +13,7 @@ import (
 type UploadHandler struct{}
 
 func (h *UploadHandler) UploadImage(c *gin.Context) {
-	file, err := c.FormFile("image")
+	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(400, gin.H{"success": false, "message": "No image file provided"})
 		return
