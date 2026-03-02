@@ -1,4 +1,4 @@
-package handlers
+package finance
 
 import (
 	"fmt"
@@ -12,20 +12,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type ReportHandler struct{}
+type ProcurementHandler struct{}
+type ReturnHandler struct{}
+type FinanceHandler struct{}
+type CRMHandler struct{}
+
 // ==================== REPORTS ====================
 
-type ReportHandler struct{}
-
 func (h *ReportHandler) SalesReport(c *gin.Context) {
-	period := c.DefaultQuery("period", "30") // days
+	period := c.DefaultQuery("period", "30")
 	days, _ := strconv.Atoi(period)
 	since := time.Now().AddDate(0, 0, -days)
 
-	// Sales over time
 	type DailySales struct {
-		Date     string `json:"date"`
-		Revenue  int    `json:"revenue"`
-		Orders   int    `json:"orders"`
+		Date    string `json:"date"`
+		Revenue int    `json:"revenue"`
+		Orders  int    `json:"orders"`
 	}
 	var daily []DailySales
 	database.DB.Raw(`
@@ -38,7 +41,6 @@ func (h *ReportHandler) SalesReport(c *gin.Context) {
 		ORDER BY date ASC
 	`, since).Scan(&daily)
 
-	// Total revenue
 	var totalRevenue int
 	database.DB.Model(&models.Order{}).Where("status != ? AND created_at >= ?", "canceled", since).
 		Select("COALESCE(SUM(total), 0)").Scan(&totalRevenue)
@@ -64,13 +66,13 @@ func (h *ReportHandler) TopProducts(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
 	type TopProduct struct {
-		ProductID   uint    `json:"product_id"`
-		ProductName string  `json:"product_name"`
-		SKU         string  `json:"sku"`
-		ImageURL    string  `json:"image_url"`
-		TotalSold   int     `json:"total_sold"`
-		TotalRevenue int    `json:"total_revenue"`
-		AvgRating   float64 `json:"avg_rating"`
+		ProductID    uint    `json:"product_id"`
+		ProductName  string  `json:"product_name"`
+		SKU          string  `json:"sku"`
+		ImageURL     string  `json:"image_url"`
+		TotalSold    int     `json:"total_sold"`
+		TotalRevenue int     `json:"total_revenue"`
+		AvgRating    float64 `json:"avg_rating"`
 	}
 	var top []TopProduct
 	database.DB.Raw(`
@@ -116,8 +118,6 @@ func (h *ReportHandler) RevenueByCategory(c *gin.Context) {
 
 // ==================== PROCUREMENT ====================
 
-type ProcurementHandler struct{}
-
 func (h *ProcurementHandler) ListPurchaseOrders(c *gin.Context) {
 	var orders []models.PurchaseOrder
 	var total int64
@@ -159,13 +159,11 @@ func (h *ProcurementHandler) CreatePurchaseOrder(c *gin.Context) {
 
 	poNumber := fmt.Sprintf("PO-%s-%04d", time.Now().Format("20060102"), time.Now().UnixMilli()%10000)
 
-	// Calculate total
 	totalAmount := 0
 	for _, item := range input.Items {
 		totalAmount += item.Quantity * item.UnitCost
 	}
 
-	// Get supplier lead time for expected date
 	var supplier models.Supplier
 	database.DB.First(&supplier, input.SupplierID)
 	expectedAt := time.Now().AddDate(0, 0, supplier.AvgLeadTimeDays)
@@ -228,8 +226,6 @@ func (h *ProcurementHandler) ListSuppliers(c *gin.Context) {
 
 // ==================== RETURNS ====================
 
-type ReturnHandler struct{}
-
 func (h *ReturnHandler) ListReturns(c *gin.Context) {
 	var returns []models.Return
 	var total int64
@@ -266,7 +262,6 @@ func (h *ReturnHandler) CreateReturn(c *gin.Context) {
 		return
 	}
 
-	// Check order belongs to user and is delivered
 	var order models.Order
 	if err := database.DB.Where("id = ? AND user_id = ? AND status = ?", input.OrderID, userID, "delivered").First(&order).Error; err != nil {
 		utils.BadRequest(c, "Order not found or not eligible for return")
@@ -317,19 +312,15 @@ func (h *ReturnHandler) UpdateReturn(c *gin.Context) {
 
 // ==================== FINANCE ====================
 
-type FinanceHandler struct{}
-
 func (h *FinanceHandler) ProfitLoss(c *gin.Context) {
 	period := c.DefaultQuery("period", "30")
 	days, _ := strconv.Atoi(period)
 	since := time.Now().AddDate(0, 0, -days)
 
-	// Revenue from orders
 	var totalRevenue int
 	database.DB.Model(&models.Order{}).Where("status != ? AND created_at >= ?", "canceled", since).
 		Select("COALESCE(SUM(total), 0)").Scan(&totalRevenue)
 
-	// COGS (Cost of Goods Sold) from stock batches used
 	var totalCOGS int
 	database.DB.Raw(`
 		SELECT COALESCE(SUM(oi.quantity * sb.cost_price), 0) 
@@ -340,17 +331,14 @@ func (h *FinanceHandler) ProfitLoss(c *gin.Context) {
 		GROUP BY sb.product_id
 	`, since).Scan(&totalCOGS)
 
-	// Refunds
 	var totalRefunds int
 	database.DB.Model(&models.Return{}).Where("status = ? AND created_at >= ?", "refunded", since).
 		Select("COALESCE(SUM(refund_amount), 0)").Scan(&totalRefunds)
 
-	// Shipping collected
 	var shippingRevenue int
 	database.DB.Model(&models.Order{}).Where("status != ? AND created_at >= ?", "canceled", since).
 		Select("COALESCE(SUM(shipping_cost), 0)").Scan(&shippingRevenue)
 
-	// Discounts given
 	var totalDiscounts int
 	database.DB.Model(&models.Order{}).Where("status != ? AND created_at >= ?", "canceled", since).
 		Select("COALESCE(SUM(discount), 0)").Scan(&totalDiscounts)
@@ -372,8 +360,6 @@ func (h *FinanceHandler) ProfitLoss(c *gin.Context) {
 }
 
 // ==================== CRM ====================
-
-type CRMHandler struct{}
 
 func (h *CRMHandler) CustomerList(c *gin.Context) {
 	type CustomerSummary struct {
@@ -414,22 +400,18 @@ func (h *CRMHandler) CustomerDetail(c *gin.Context) {
 		return
 	}
 
-	// Orders
 	var orders []models.Order
 	database.DB.Where("user_id = ?", id).Preload("Items").Preload("Items.Product").
 		Order("created_at DESC").Limit(20).Find(&orders)
 
-	// Reviews
 	var reviews []models.Review
 	database.DB.Where("user_id = ?", id).Preload("Product").Order("created_at DESC").Find(&reviews)
 
-	// Stats
 	var totalSpent int
 	var totalOrders int64
 	database.DB.Model(&models.Order{}).Where("user_id = ? AND status != ?", id, "canceled").Count(&totalOrders)
 	database.DB.Model(&models.Order{}).Where("user_id = ? AND status != ?", id, "canceled").Select("COALESCE(SUM(total), 0)").Scan(&totalSpent)
 
-	// Returns
 	var returns []models.Return
 	database.DB.Where("user_id = ?", id).Order("created_at DESC").Find(&returns)
 

@@ -1,4 +1,4 @@
-package handlers
+package product
 
 import (
 	"math"
@@ -10,14 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ProductHandler struct{}
+type Handler struct{}
 
-func (h *ProductHandler) List(c *gin.Context) {
+func (h *Handler) List(c *gin.Context) {
 	var products []models.Product
 	var total int64
 	query := database.DB.Model(&models.Product{})
 
-	// Filters
 	if cat := c.Query("category"); cat != "" {
 		query = query.Where("category_id = ?", cat)
 	}
@@ -34,10 +33,8 @@ func (h *ProductHandler) List(c *gin.Context) {
 		query = query.Where("seller_id = ?", sellerID)
 	}
 
-	// Count total
 	query.Count(&total)
 
-	// Sort
 	switch c.Query("sort") {
 	case "price_asc":
 		query = query.Order("price ASC")
@@ -51,7 +48,6 @@ func (h *ProductHandler) List(c *gin.Context) {
 		query = query.Order("id ASC")
 	}
 
-	// Pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	if page < 1 { page = 1 }
@@ -69,7 +65,7 @@ func (h *ProductHandler) List(c *gin.Context) {
 	})
 }
 
-func (h *ProductHandler) GetByID(c *gin.Context) {
+func (h *Handler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	var product models.Product
 	if err := database.DB.Preload("Category").Preload("Variants").Preload("Reviews").First(&product, id).Error; err != nil {
@@ -79,7 +75,7 @@ func (h *ProductHandler) GetByID(c *gin.Context) {
 	utils.Success(c, product)
 }
 
-func (h *ProductHandler) GetReviews(c *gin.Context) {
+func (h *Handler) GetReviews(c *gin.Context) {
 	productID := c.Param("id")
 	var reviews []models.Review
 	var total int64
@@ -102,8 +98,43 @@ func (h *ProductHandler) GetReviews(c *gin.Context) {
 	})
 }
 
-func (h *ProductHandler) ListCategories(c *gin.Context) {
+func (h *Handler) ListCategories(c *gin.Context) {
 	var categories []models.Category
 	database.DB.Find(&categories)
 	utils.Success(c, categories)
+}
+
+func (h *Handler) Create(c *gin.Context) {
+	var product models.Product
+	if err := c.ShouldBindJSON(&product); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	database.DB.Create(&product)
+	utils.Created(c, product)
+}
+
+func (h *Handler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var product models.Product
+	if err := database.DB.First(&product, id).Error; err != nil {
+		utils.NotFound(c, "Product not found")
+		return
+	}
+	if err := c.ShouldBindJSON(&product); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	database.DB.Save(&product)
+	utils.Success(c, product)
+}
+
+func (h *Handler) Delete(c *gin.Context) {
+	id := c.Param("id")
+	result := database.DB.Delete(&models.Product{}, id)
+	if result.RowsAffected == 0 {
+		utils.NotFound(c, "Product not found")
+		return
+	}
+	utils.Success(c, gin.H{"message": "Product deleted"})
 }

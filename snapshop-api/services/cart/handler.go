@@ -1,4 +1,4 @@
-package handlers
+package cart
 
 import (
 	"snapshop-api/database"
@@ -8,7 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type CartHandler struct{}
+type Handler struct{}
+type WishlistHandler struct{}
+
+// ====== CART ======
 
 type CartInput struct {
 	ProductID   uint   `json:"product_id" binding:"required"`
@@ -16,12 +19,11 @@ type CartInput struct {
 	Quantity    int    `json:"quantity" binding:"required,min=1"`
 }
 
-func (h *CartHandler) List(c *gin.Context) {
+func (h *Handler) List(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var items []models.CartItem
 	database.DB.Where("user_id = ?", userID).Preload("Product").Preload("Product.Category").Find(&items)
 
-	// Calculate totals
 	var subtotal int
 	for _, item := range items {
 		subtotal += item.Product.Price * item.Quantity
@@ -34,7 +36,7 @@ func (h *CartHandler) List(c *gin.Context) {
 	})
 }
 
-func (h *CartHandler) Add(c *gin.Context) {
+func (h *Handler) Add(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var input CartInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -42,14 +44,12 @@ func (h *CartHandler) Add(c *gin.Context) {
 		return
 	}
 
-	// Check if product exists
 	var product models.Product
 	if err := database.DB.First(&product, input.ProductID).Error; err != nil {
 		utils.NotFound(c, "Product not found")
 		return
 	}
 
-	// Upsert: if already in cart, increase quantity
 	var existing models.CartItem
 	if database.DB.Where("user_id = ? AND product_id = ?", userID, input.ProductID).First(&existing).Error == nil {
 		existing.Quantity += input.Quantity
@@ -70,7 +70,7 @@ func (h *CartHandler) Add(c *gin.Context) {
 	utils.Created(c, item)
 }
 
-func (h *CartHandler) Update(c *gin.Context) {
+func (h *Handler) Update(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id := c.Param("id")
 	var input struct {
@@ -89,7 +89,7 @@ func (h *CartHandler) Update(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "Cart updated"})
 }
 
-func (h *CartHandler) Delete(c *gin.Context) {
+func (h *Handler) Delete(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id := c.Param("id")
 	result := database.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&models.CartItem{})
@@ -101,8 +101,6 @@ func (h *CartHandler) Delete(c *gin.Context) {
 }
 
 // ====== WISHLIST ======
-
-type WishlistHandler struct{}
 
 func (h *WishlistHandler) List(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -121,7 +119,6 @@ func (h *WishlistHandler) Add(c *gin.Context) {
 		return
 	}
 
-	// Check duplicate
 	var existing models.WishlistItem
 	if database.DB.Where("user_id = ? AND product_id = ?", userID, input.ProductID).First(&existing).Error == nil {
 		utils.BadRequest(c, "Already in wishlist")
@@ -155,7 +152,6 @@ func (h *WishlistHandler) MoveToCart(c *gin.Context) {
 		database.DB.Where("user_id = ? AND product_id = ?", userID, item.ProductID).FirstOrCreate(&cartItem)
 	}
 
-	// Clear wishlist
 	database.DB.Where("user_id = ?", userID).Delete(&models.WishlistItem{})
 	utils.Success(c, gin.H{"message": "All items moved to cart", "count": len(items)})
 }

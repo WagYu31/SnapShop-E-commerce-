@@ -1,4 +1,4 @@
-package handlers
+package auth
 
 import (
 	"snapshop-api/config"
@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthHandler struct {
+type Handler struct {
 	Config *config.Config
 }
 
@@ -28,21 +28,19 @@ type LoginInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *Handler) Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.BadRequest(c, err.Error())
 		return
 	}
 
-	// Check if email exists
 	var existing models.User
 	if database.DB.Where("email = ?", input.Email).First(&existing).Error == nil {
 		utils.BadRequest(c, "Email already registered")
 		return
 	}
 
-	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		utils.Error(c, 500, "Failed to hash password")
@@ -62,7 +60,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Generate JWT
 	token := h.generateToken(user)
 
 	utils.Created(c, gin.H{
@@ -71,7 +68,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *Handler) Login(c *gin.Context) {
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.BadRequest(c, err.Error())
@@ -97,7 +94,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-func (h *AuthHandler) generateToken(user models.User) string {
+func (h *Handler) generateToken(user models.User) string {
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"email":   user.Email,

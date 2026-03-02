@@ -1,4 +1,4 @@
-package handlers
+package user
 
 import (
 	"snapshop-api/database"
@@ -9,22 +9,23 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type UserHandler struct{}
+type Handler struct{}
+type AddressHandler struct{}
 
-func (h *UserHandler) GetProfile(c *gin.Context) {
+func (h *Handler) GetProfile(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	database.DB.Preload("Addresses").First(&user, user.ID)
 	utils.Success(c, user)
 }
 
 type UpdateProfileInput struct {
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
-	Bio   string `json:"bio"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Bio       string `json:"bio"`
 	AvatarURL string `json:"avatar_url"`
 }
 
-func (h *UserHandler) UpdateProfile(c *gin.Context) {
+func (h *Handler) UpdateProfile(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	var input UpdateProfileInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -48,7 +49,7 @@ type ChangePasswordInput struct {
 	NewPassword string `json:"new_password" binding:"required,min=6"`
 }
 
-func (h *UserHandler) ChangePassword(c *gin.Context) {
+func (h *Handler) ChangePassword(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	var input ChangePasswordInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -68,8 +69,6 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 
 // ====== ADDRESS ======
 
-type AddressHandler struct{}
-
 func (h *AddressHandler) List(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var addresses []models.Address
@@ -86,7 +85,6 @@ func (h *AddressHandler) Create(c *gin.Context) {
 	}
 	addr.UserID = userID
 
-	// If first address, set as default
 	var count int64
 	database.DB.Model(&models.Address{}).Where("user_id = ?", userID).Count(&count)
 	if count == 0 {
@@ -129,9 +127,7 @@ func (h *AddressHandler) SetDefault(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id := c.Param("id")
 
-	// Unset all defaults
 	database.DB.Model(&models.Address{}).Where("user_id = ?", userID).Update("is_default", false)
-	// Set new default
 	database.DB.Model(&models.Address{}).Where("id = ? AND user_id = ?", id, userID).Update("is_default", true)
 	utils.Success(c, gin.H{"message": "Default address updated"})
 }

@@ -1,4 +1,4 @@
-package handlers
+package upload
 
 import (
 	"fmt"
@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type UploadHandler struct{}
+type Handler struct{}
 
-func (h *UploadHandler) UploadImage(c *gin.Context) {
+func (h *Handler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(400, gin.H{"success": false, "message": "No image file provided"})
@@ -23,7 +23,7 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	allowed := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true, ".avif": true, ".svg": true}
 	if !allowed[ext] {
-		c.JSON(400, gin.H{"success": false, "message": "Invalid file type. Allowed: jpg, jpeg, png, webp, gif"})
+		c.JSON(400, gin.H{"success": false, "message": "Invalid file type. Allowed: jpg, jpeg, png, webp, gif, avif, svg"})
 		return
 	}
 
