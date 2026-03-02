@@ -8,17 +8,50 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import AnimatedButton from '../components/AnimatedButton';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = Platform.OS === 'web' ? 'http://localhost:8080/api/v1' : 'http://localhost:8080/api/v1';
 
 export default function LoginScreen() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSignIn = async () => {
+        setError('');
+        if (!email.trim()) { setError('Please enter your email'); return; }
+        if (!password.trim()) { setError('Please enter your password'); return; }
+
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email.trim(), password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.error || 'Invalid email or password');
+                setLoading(false);
+                return;
+            }
+            await AsyncStorage.setItem('token', data.data.token);
+            await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
+            router.replace('/(tabs)');
+        } catch (err) {
+            setError('Cannot connect to server. Please try again.');
+        }
+        setLoading(false);
+    };
 
     return (
         <KeyboardAvoidingView
@@ -44,7 +77,7 @@ export default function LoginScreen() {
                                 placeholder="Enter your email"
                                 placeholderTextColor={Colors.gray}
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(t) => { setEmail(t); setError(''); }}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
@@ -59,7 +92,7 @@ export default function LoginScreen() {
                                 placeholder="Enter your password"
                                 placeholderTextColor={Colors.gray}
                                 value={password}
-                                onChangeText={setPassword}
+                                onChangeText={(t) => { setPassword(t); setError(''); }}
                                 secureTextEntry={!showPassword}
                             />
                             <TouchableOpacity
@@ -79,11 +112,12 @@ export default function LoginScreen() {
                         <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
 
+                    {error ? <Text style={{ color: '#e74c3c', fontSize: 14, marginBottom: 16, textAlign: 'center' }}>{error}</Text> : null}
 
                     <AnimatedButton
-                        onPress={() => router.replace('/(tabs)')}
-                        title="Sign In"
-                        style={styles.signInButton}
+                        onPress={handleSignIn}
+                        title={loading ? 'Signing in...' : 'Sign In'}
+                        style={loading ? { ...styles.signInButton, opacity: 0.7 } : styles.signInButton}
                         textStyle={styles.signInButtonText}
                     />
 
