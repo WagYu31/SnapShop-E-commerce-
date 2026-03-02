@@ -365,30 +365,42 @@ function ProductsPage() {
                       setFormError('')
                       setSaving(true)
                       try {
-                        // Auto-compress image using Canvas API
-                        const compressed = await new Promise((resolve) => {
-                          const reader = new FileReader()
-                          reader.onload = (ev) => {
-                            const img = new Image()
-                            img.onload = () => {
-                              const canvas = document.createElement('canvas')
-                              const MAX_SIZE = 1200
-                              let w = img.width, h = img.height
-                              if (w > MAX_SIZE || h > MAX_SIZE) {
-                                if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE }
-                                else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE }
+                        // Try auto-compress with Canvas API
+                        let uploadFile = file
+                        try {
+                          const compressed = await new Promise((resolve, reject) => {
+                            const reader = new FileReader()
+                            reader.onerror = () => reject(new Error('Read failed'))
+                            reader.onload = (ev) => {
+                              const img = new Image()
+                              img.onerror = () => reject(new Error('Format not supported for compression'))
+                              img.onload = () => {
+                                try {
+                                  const canvas = document.createElement('canvas')
+                                  const MAX_SIZE = 1200
+                                  let w = img.width, h = img.height
+                                  if (w > MAX_SIZE || h > MAX_SIZE) {
+                                    if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE }
+                                    else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE }
+                                  }
+                                  canvas.width = w; canvas.height = h
+                                  canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+                                  canvas.toBlob((blob) => {
+                                    if (blob) resolve(blob); else reject(new Error('Compress failed'))
+                                  }, 'image/jpeg', 0.8)
+                                } catch (err) { reject(err) }
                               }
-                              canvas.width = w; canvas.height = h
-                              canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-                              canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8)
+                              img.src = ev.target.result
                             }
-                            img.src = ev.target.result
-                          }
-                          reader.readAsDataURL(file)
-                        })
-                        const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
-                        setFormError(`📦 Compressed: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(1)}MB`)
-                        const res = await api.uploadImage(compressedFile)
+                            reader.readAsDataURL(file)
+                          })
+                          uploadFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+                          console.log(`Compressed: ${(file.size / 1024).toFixed(0)}KB → ${(uploadFile.size / 1024).toFixed(0)}KB`)
+                        } catch {
+                          console.log('Compression skipped, uploading original file')
+                          uploadFile = file
+                        }
+                        const res = await api.uploadImage(uploadFile)
                         if (res.success) {
                           setForm(f => ({ ...f, image_url: res.data.url }))
                           setFormError('')
@@ -398,7 +410,7 @@ function ProductsPage() {
                       } catch { setFormError('Upload failed. Please try again.') }
                       setSaving(false)
                     }} style={{ padding: 8 }} />
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Any size • Auto-compressed to max 1200px JPEG</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Any size • JPG, PNG, WebP, AVIF, GIF</p>
                   </div>
                 )}
                 {form.image_url && (

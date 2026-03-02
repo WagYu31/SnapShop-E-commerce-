@@ -21,7 +21,7 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	// Validate file type
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	allowed := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
+	allowed := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true, ".avif": true, ".svg": true}
 	if !allowed[ext] {
 		c.JSON(400, gin.H{"success": false, "message": "Invalid file type. Allowed: jpg, jpeg, png, webp, gif"})
 		return
