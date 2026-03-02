@@ -327,8 +327,39 @@ function ProductsPage() {
                 </select>
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>Image URL</label>
-                <input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} placeholder="https://images.unsplash.com/..." />
+                <label>Product Image</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <button type="button" className={`btn btn-sm ${!form._uploadMode ? 'btn-primary' : 'btn-outline'}`} onClick={() => setForm({ ...form, _uploadMode: false })}>🔗 URL Link</button>
+                  <button type="button" className={`btn btn-sm ${form._uploadMode ? 'btn-primary' : 'btn-outline'}`} onClick={() => setForm({ ...form, _uploadMode: true })}>📁 Upload File</button>
+                </div>
+                {!form._uploadMode ? (
+                  <input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} placeholder="https://images.unsplash.com/..." />
+                ) : (
+                  <div>
+                    <input type="file" accept="image/*" onChange={async (e) => {
+                      const file = e.target.files[0]
+                      if (!file) return
+                      setFormError('')
+                      setSaving(true)
+                      try {
+                        const res = await api.uploadImage(file)
+                        if (res.success) {
+                          setForm(f => ({ ...f, image_url: res.data.url }))
+                        } else {
+                          setFormError(res.message || 'Upload failed')
+                        }
+                      } catch { setFormError('Upload failed. Check file size (max 5MB)') }
+                      setSaving(false)
+                    }} style={{ padding: 8 }} />
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>Max 5MB • JPG, PNG, WebP, GIF</p>
+                  </div>
+                )}
+                {form.image_url && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <img src={form.image_url.startsWith('/') ? `http://localhost:8080${form.image_url}` : form.image_url} alt="Preview" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} onError={e => e.target.style.display = 'none'} />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{form.image_url}</span>
+                  </div>
+                )}
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Description</label>

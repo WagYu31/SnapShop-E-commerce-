@@ -38,6 +38,15 @@ class ApiService {
     getProducts(params = '') { return this.request('GET', `/products${params}`); }
     getProduct(id) { return this.request('GET', `/products/${id}`); }
     createProduct(data) { return this.request('POST', '/admin/products', data); }
+    uploadImage(file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        return fetch(`${this.base}/admin/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${this.token}` },
+            body: formData
+        }).then(r => r.json());
+    }
     updateProduct(id, data) { return this.request('PUT', `/admin/products/${id}`, data); }
     deleteProduct(id) { return this.request('DELETE', `/admin/products/${id}`); }
 

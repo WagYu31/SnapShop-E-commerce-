@@ -38,6 +38,9 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok", "service": "SnapShop API", "version": "1.0.0"})
 	})
 
+	// Serve uploaded files
+	r.Static("/uploads", "./uploads")
+
 	// Handlers
 	authH := &handlers.AuthHandler{Config: cfg}
 	productH := &handlers.ProductHandler{}
@@ -57,6 +60,7 @@ func main() {
 	returnH := &handlers.ReturnHandler{}
 	financeH := &handlers.FinanceHandler{}
 	crmH := &handlers.CRMHandler{}
+	uploadH := &handlers.UploadHandler{}
 
 	api := r.Group("/api/v1")
 	{
@@ -145,6 +149,7 @@ func main() {
 		admin.Use(middleware.AuthRequired(cfg))
 		admin.Use(middleware.RoleRequired(models.RoleAdmin, models.RoleSuperAdmin))
 		{
+			admin.POST("/upload", uploadH.UploadImage)
 			admin.POST("/products", adminH.CreateProduct)
 			admin.PUT("/products/:id", adminH.UpdateProduct)
 			admin.DELETE("/products/:id", adminH.DeleteProduct)
