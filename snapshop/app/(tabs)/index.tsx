@@ -262,7 +262,7 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.productGrid}>
-              {filteredProducts.slice(4, 8).map((product, index) =>
+              {filteredProducts.slice(4).map((product, index) =>
                 renderProductCard(product, index)
               )}
             </View>
