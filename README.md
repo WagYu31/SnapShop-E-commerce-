@@ -2,6 +2,7 @@
 
 A **full-stack e-commerce platform** with a React Native mobile app, Golang REST API backend (modular monolith architecture), and React admin dashboard. Built with Docker, PostgreSQL, role-based access control (6-level RBAC), Midtrans payment gateway, and ERP modules for complete business management.
 
+![Uploading simulator_screenshot_6FDC2B0E-1763-4390-B626-05F5BDFD22E2.png…]()
 
 
 
