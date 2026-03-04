@@ -462,36 +462,45 @@ The backend uses **20+ models** with GORM auto-migration:
 
 ---
 
-## Demo
+## Screenshots
 
-### 📱 Mobile App Demo (iOS Simulator)
+### 📱 Mobile App (Customer)
 
-https://github.com/user-attachments/assets/snapshop-mobile-demo
+> *iPhone 17 Pro — iOS 26.2*
 
-<video src="demo/snapshop_mobile_demo.mp4" controls width="300"></video>
+#### Onboarding & Auth
+| Onboarding | Login | Sign Up | Forgot Password |
+|:---:|:---:|:---:|:---:|
+| ![Onboarding](demo/screenshots/01_onboarding.png) | ![Login](demo/screenshots/02_login.png) | ![Sign Up](demo/screenshots/03_signup.png) | ![Forgot Password](demo/screenshots/04_forgot_password.png) |
 
-> *Recorded on iPhone 17 Pro Simulator — iOS 26.2*
+#### Shopping
+| Home | Search | Product Detail | Cart |
+|:---:|:---:|:---:|:---:|
+| ![Home](demo/screenshots/05_home.png) | ![Search](demo/screenshots/06_search.png) | ![Product Detail](demo/screenshots/07_product_detail.png) | ![Cart](demo/screenshots/08_cart.png) |
 
-**Screens shown:**
-- 🏠 Home — Banner carousel, categories, product grid
-- 🔍 Search — Product search & filters
-- 📦 Product Detail — Variants, reviews, add to cart
-- 🛒 Cart — Quantity management, checkout
-- ❤️ Wishlist — Saved items
-- 👤 Profile — User account, edit profile
-- 🔐 Change Password — Password strength indicator
-- 📍 Addresses — Delivery address management
+#### Orders & Wishlist
+| Checkout | Order History | Wishlist |
+|:---:|:---:|:---:|
+| ![Checkout](demo/screenshots/09_checkout.png) | ![Orders](demo/screenshots/10_orders.png) | ![Wishlist](demo/screenshots/11_wishlist.png) |
+
+#### Profile & Settings
+| Profile | Edit Profile | Change Password |
+|:---:|:---:|:---:|
+| ![Profile](demo/screenshots/12_profile.png) | ![Edit Profile](demo/screenshots/13_edit_profile.png) | ![Change Password](demo/screenshots/14_change_password.png) |
+
+---
 
 ### 🖥️ Admin Dashboard
-- Premium dark theme
-- Role-based sidebar navigation
-- Real-time dashboard stats with revenue trend chart
-- Product management with CRUD
-- Order management with status flow
-- Warehouse stock with FIFO batches
-- ERP modules (Reports, Finance, CRM)
-- 🛡️ Security & Audit dashboard
-- 🔐 Password Management for staff
+
+> *Premium dark theme — SuperAdmin view*
+
+| Dashboard | Products | Orders |
+|:---:|:---:|:---:|
+| ![Dashboard](demo/screenshots/admin_01_dashboard.png) | ![Products](demo/screenshots/admin_02_products.png) | ![Orders](demo/screenshots/admin_03_orders.png) |
+
+| User Management | Audit & Security | Sales Report |
+|:---:|:---:|:---:|
+| ![Users](demo/screenshots/admin_04_users.png) | ![Audit](demo/screenshots/admin_05_audit.png) | ![Sales](demo/screenshots/admin_06_sales.png) |
 
 ---
 
