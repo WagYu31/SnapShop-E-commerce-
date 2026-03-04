@@ -1,6 +1,6 @@
 # 🛍️ SnapShop E-commerce Platform
 
-A **full-stack e-commerce platform** with a React Native mobile app, Golang REST API backend (modular monolith architecture), and React admin dashboard. Built with Docker, PostgreSQL, role-based access control (6-level RBAC), and ERP modules for complete business management.
+A **full-stack e-commerce platform** with a React Native mobile app, Golang REST API backend (modular monolith architecture), and React admin dashboard. Built with Docker, PostgreSQL, role-based access control (6-level RBAC), Midtrans payment gateway, and ERP modules for complete business management.
 
 ---
 
@@ -42,11 +42,11 @@ SnapShop is a complete e-commerce solution consisting of three applications:
 └─────────────────┘     └──────────────────┘     │  │ Gateway (router.go)     │ │
                                                   │  └──────────┬──────────────┘ │
                                                   │  ┌──────────▼──────────────┐ │
-                                                  │  │      10 Services        │ │
+                                                  │  │      12 Services        │ │
                                                   │  │ auth │ product │ order  │ │
                                                   │  │ user │ cart    │ wh     │ │
                                                   │  │ commerce │ admin │ fin  │ │
-                                                  │  │ upload                  │ │
+                                                  │  │ payment│shipping│upload │ │
                                                   │  └──────────┬──────────────┘ │
                                                   └──────────────┼───────────────┘
                                                        ┌────────▼────────┐
@@ -57,12 +57,12 @@ SnapShop is a complete e-commerce solution consisting of three applications:
 
 ### Modular Monolith Pattern
 
-The backend uses a **modular monolith** architecture: code is organized into 10 independent service packages, but runs as a single binary with a shared PostgreSQL database. This gives the clean separation of microservices without the operational complexity.
+The backend uses a **modular monolith** architecture: code is organized into 12 independent service packages, but runs as a single binary with a shared PostgreSQL database. This gives the clean separation of microservices without the operational complexity.
 
 | Layer | Description |
 |-------|-------------|
 | `gateway/` | Route registration — maps HTTP routes to service handlers |
-| `services/` | 10 service packages, each with its own handler |
+| `services/` | 12 service packages, each with its own handler |
 | `models/` | Shared database models (GORM) |
 | `middleware/` | JWT auth & RBAC middleware |
 | `database/` | DB connection, migrations, seed data |
@@ -118,17 +118,20 @@ The backend uses a **modular monolith** architecture: code is organized into 10 
 - 🛒 Shopping cart with quantity management
 - ❤️ Wishlist with move-to-cart functionality
 - 📍 Address management (add, edit, delete, set default)
-- 💳 Checkout with delivery method selection (courier/store pickup)
+- 💳 Checkout with Midtrans payment gateway integration
 - 🎫 Voucher/promo code system
 - 📋 Order tracking & history
-- 👤 User profile management
+- � Return requests with reason & evidence upload
+- 👤 Edit profile (loads real user data, saves via API)
+- 🔐 Change password with strength indicator
 - 🌙 Dark/Light mode toggle
-- 🔐 Full authentication (register, login, forgot password)
+- � Full authentication (register, login, forgot password)
 - ⭐ Product reviews & ratings
 - 🗺️ Store locator with map integration
+- 💰 Payment WebView for Midtrans Snap transactions
 
 ### 🖥️ Admin Dashboard
-- 📊 **Dashboard** — Real-time stats (revenue, orders, products, customers)
+- 📊 **Dashboard** — Real-time stats (revenue, orders, products, customers), revenue trend chart, order distribution
 - 📦 **Products** — Full CRUD product management with search & pagination
 - 🛒 **Orders** — Order management with status updates (pending → delivered)
 - 🎫 **Vouchers** — Create & manage promotional discounts
@@ -140,16 +143,22 @@ The backend uses a **modular monolith** architecture: code is organized into 10 
 - 💰 **Profit & Loss** — Financial P&L with COGS, margins, refunds, shipping
 - 👤 **Customers CRM** — Customer lifetime value, order history, reviews
 - 🏪 **Store Locations** — Manage physical stores with address & hours
-- 👥 **User Management** — View & manage all users
-- 📝 **Audit Logs** — Track all administrative actions (SuperAdmin only)
+- 👥 **User Management** — View & manage all users, SuperAdmin password reset for staff
+- �️ **Keamanan & Audit** — Security stats dashboard, action distribution chart, audit log table with filter, search & pagination (SuperAdmin only)
 
-### 🔐 Security
+### 🔐 Security & Password Management
 - JWT-based authentication with token expiry
 - bcrypt password hashing
-- Role-based access control (RBAC) with 5 levels
 - 6-level RBAC: Customer → Seller → Warehouse → Store → Admin → SuperAdmin
 - Middleware-enforced route protection
 - CORS configuration
+- **Password Management System:**
+  - SuperAdmin can directly reset passwords for staff (warehouse/seller/store/admin)
+  - Staff must request password reset → SuperAdmin approves or rejects
+  - Customers change their own password via mobile app
+  - Password strength indicator on change password screen
+- **Audit Trail** — All admin actions logged with user, action, target, IP, timestamp
+- **Security Dashboard** — Stats: total logs, today/weekly activity, action breakdown
 
 ---
 
@@ -177,17 +186,19 @@ SnapShop E-commerce/
 │   ├── main.go                  # Entry point (simplified)
 │   ├── gateway/
 │   │   └── router.go            # 🆕 Centralized route registration
-│   ├── services/                # 🆕 10 service-based packages
-│   │   ├── auth/handler.go      # Auth Service     — Register, Login, JWT
-│   │   ├── product/handler.go   # Product Service   — List, Detail, CRUD, Categories
-│   │   ├── order/handler.go     # Order Service     — Checkout, Order list, Status
-│   │   ├── user/handler.go      # User Service      — Profile, Password, Addresses
-│   │   ├── cart/handler.go      # Cart Service      — Cart CRUD, Wishlist
-│   │   ├── warehouse/handler.go # Warehouse Service — Stock, Inbound, Store transfers
-│   │   ├── commerce/handler.go  # Commerce Service  — Vouchers, Reviews
-│   │   ├── admin/handler.go     # Admin Service     — Dashboard, Users, SuperAdmin
-│   │   ├── finance/handler.go   # Finance Service   — Reports, Procurement, P&L, CRM
-│   │   └── upload/handler.go    # Upload Service    — Image upload with compression
+│   ├── services/                # 12 service-based packages
+│   │   ├── auth/handler.go      # Auth Service      — Register, Login, JWT
+│   │   ├── product/handler.go   # Product Service    — List, Detail, CRUD, Categories
+│   │   ├── order/handler.go     # Order Service      — Checkout, Order list, Status
+│   │   ├── user/handler.go      # User Service       — Profile, Password, Addresses
+│   │   ├── cart/handler.go      # Cart Service       — Cart CRUD, Wishlist
+│   │   ├── warehouse/handler.go # Warehouse Service  — Stock, Inbound, Store transfers
+│   │   ├── commerce/handler.go  # Commerce Service   — Vouchers, Reviews
+│   │   ├── admin/handler.go     # Admin Service      — Dashboard, Users, SuperAdmin, Password Mgmt
+│   │   ├── finance/handler.go   # Finance Service    — Reports, Procurement, P&L, CRM
+│   │   ├── payment/handler.go   # Payment Service    — Midtrans token & verification
+│   │   ├── shipping/handler.go  # Shipping Service   — Binderbyte courier & cost
+│   │   └── upload/handler.go    # Upload Service     — Image upload with compression
 │   ├── config/config.go         # App configuration
 │   ├── database/
 │   │   ├── database.go          # PostgreSQL connection & migrations
@@ -328,6 +339,9 @@ Authorization: Bearer <jwt_token>
 | `POST` | `/vouchers/validate` | Validate voucher code |
 | `POST` | `/reviews` | Write a review |
 | `POST` | `/returns` | Request a return |
+| `POST` | `/payment/:id/token` | Get Midtrans payment token |
+| `GET` | `/payment/:id/verify` | Verify payment status |
+| `POST` | `/shipping/cost` | Calculate shipping cost |
 | `GET` | `/dashboard` | Dashboard stats (role-filtered) |
 
 #### 🏭 Warehouse (Level 3+)
@@ -368,7 +382,18 @@ Authorization: Bearer <jwt_token>
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `PUT` | `/superadmin/users/:id/role` | Change user role |
-| `GET` | `/superadmin/audit-logs` | System audit logs |
+| `DELETE` | `/superadmin/users/:id` | Delete user |
+| `PUT` | `/superadmin/users/:id/password` | Reset user password |
+| `GET` | `/superadmin/password-requests` | List pending password requests |
+| `POST` | `/superadmin/password-requests/:id/approve` | Approve password request |
+| `POST` | `/superadmin/password-requests/:id/reject` | Reject password request |
+| `GET` | `/superadmin/audit-logs` | System audit logs (filter by action) |
+| `GET` | `/superadmin/audit-stats` | Security statistics dashboard |
+
+#### 🔑 Staff Password Self-Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/admin/request-password-reset` | Staff request password reset (needs SuperAdmin approval) |
 
 ---
 
@@ -408,7 +433,7 @@ All accounts use password: `password123`
 
 ## Database Models
 
-The backend uses **15+ models** with GORM auto-migration:
+The backend uses **20+ models** with GORM auto-migration:
 
 | Model | Description |
 |-------|-------------|
@@ -431,6 +456,7 @@ The backend uses **15+ models** with GORM auto-migration:
 | `PurchaseOrderItem` | Items in purchase orders |
 | `Return` | Product return requests |
 | `AuditLog` | System activity tracking |
+| `PasswordResetRequest` | Staff password reset requests (pending/approved/rejected) |
 
 ---
 
