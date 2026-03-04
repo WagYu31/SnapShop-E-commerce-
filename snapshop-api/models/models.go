@@ -161,6 +161,7 @@ type Address struct {
 	Phone         string `gorm:"size:20;not null" json:"phone" validate:"required"`
 	Street        string `gorm:"type:text;not null" json:"street" validate:"required"`
 	City          string `gorm:"size:100;not null" json:"city" validate:"required"`
+	CityID        int    `gorm:"default:0" json:"city_id"` // RajaOngkir city ID
 	Province      string `gorm:"size:100" json:"province"`
 	PostalCode    string `gorm:"size:10" json:"postal_code"`
 	IsDefault     bool   `gorm:"default:false" json:"is_default"`
@@ -172,12 +173,15 @@ type Address struct {
 type OrderStatus string
 
 const (
-	OrderPending    OrderStatus = "pending"
-	OrderConfirmed  OrderStatus = "confirmed"
-	OrderPreparing  OrderStatus = "preparing"
-	OrderShipped    OrderStatus = "in_transit"
-	OrderDelivered  OrderStatus = "delivered"
-	OrderCanceled   OrderStatus = "canceled"
+	OrderPending        OrderStatus = "pending"
+	OrderWaitingPayment OrderStatus = "waiting_payment"
+	OrderPaid           OrderStatus = "paid"
+	OrderConfirmed      OrderStatus = "confirmed"
+	OrderPreparing      OrderStatus = "preparing"
+	OrderShipped        OrderStatus = "in_transit"
+	OrderDelivered      OrderStatus = "delivered"
+	OrderCanceled       OrderStatus = "canceled"
+	OrderReturned       OrderStatus = "returned"
 )
 
 type Order struct {
@@ -191,9 +195,19 @@ type Order struct {
 	Discount     int         `gorm:"default:0" json:"discount"`
 	Total        int         `gorm:"not null" json:"total"`
 	CourierName  string      `gorm:"size:100" json:"courier_name"`
+	CourierService string   `gorm:"size:50" json:"courier_service"` // REG, YES, OKE, etc.
 	VoucherCode  string      `gorm:"size:50" json:"voucher_code"`
 	StoreID      *uint       `json:"store_id"` // for store pickup
 	Notes        string      `gorm:"type:text" json:"notes"`
+
+	// Payment fields
+	PaymentMethod string     `gorm:"size:20;default:midtrans" json:"payment_method"` // midtrans, cod
+	PaymentToken  string     `gorm:"size:255" json:"payment_token,omitempty"`
+	PaymentURL    string     `gorm:"size:500" json:"payment_url,omitempty"`
+	MidtransID    string     `gorm:"size:100;index" json:"midtrans_id,omitempty"`
+	PaidAt        *time.Time `json:"paid_at,omitempty"`
+	TrackingNumber string   `gorm:"size:100" json:"tracking_number,omitempty"`
+
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
 
@@ -332,3 +346,19 @@ type PurchaseOrderItem struct {
 
 	Product Product `gorm:"foreignKey:ProductID" json:"product,omitempty"`
 }
+
+// ==================== PASSWORD RESET REQUEST ====================
+
+type PasswordResetRequest struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	UserID     uint      `gorm:"index;not null" json:"user_id"`
+	Reason     string    `gorm:"type:text" json:"reason"` // "change" or "forgot"
+	Status     string    `gorm:"size:20;default:pending;not null" json:"status"` // pending, approved, rejected
+	AdminNotes string    `gorm:"type:text" json:"admin_notes"`
+	ResolvedBy uint      `json:"resolved_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+
+	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+

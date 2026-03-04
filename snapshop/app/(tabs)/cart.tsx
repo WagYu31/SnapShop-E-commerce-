@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,60 +7,141 @@ import {
     TouchableOpacity,
     Image,
     TextInput,
+    ActivityIndicator,
+    Alert,
+    RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../../constants/theme';
-import { products } from '../../constants/data';
+import { API_URL } from '../../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AnimatedButton from '../../components/AnimatedButton';
 
-interface CartItem {
-    product: typeof products[0];
+interface CartItemData {
+    id: number;
+    product_id: number;
     quantity: number;
-    selectedColor: string;
-    selectedSize: string;
+    variant_info: string;
+    product: {
+        id: number;
+        name: string;
+        price: number;
+        image_url: string;
+        category?: { name: string };
+    };
 }
-
-const initialCart: CartItem[] = [
-    {
-        product: products[0],
-        quantity: 2,
-        selectedColor: 'Black',
-        selectedSize: 'M',
-    },
-    {
-        product: products[1],
-        quantity: 1,
-        selectedColor: 'Navy',
-        selectedSize: 'L',
-    },
-];
 
 export default function CartScreen() {
     const router = useRouter();
-    const [cartItems, setCartItems] = useState<CartItem[]>(initialCart);
+    const [cartItems, setCartItems] = useState<CartItemData[]>([]);
+    const [subtotal, setSubtotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [promoCode, setPromoCode] = useState('');
 
-    const updateQuantity = (index: number, delta: number) => {
-        setCartItems((prev) =>
-            prev.map((item, i) =>
-                i === index
-                    ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-                    : item
-            )
-        );
-    };
+    const fetchCart = useCallback(async () => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+            setLoading(false);
+            return;
+        }
+        try {
+            const res = await fetch(`${API_URL}/cart`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.success && data.data) {
+                setCartItems(data.data.items || []);
+                setSubtotal(data.data.subtotal || 0);
+            }
+        } catch (e) {
+            console.error('Failed to fetch cart', e);
+        }
+        setLoading(false);
+        setRefreshing(false);
+    }, []);
 
-    const removeItem = (index: number) => {
-        setCartItems((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    const subtotal = cartItems.reduce(
-        (sum, item) => sum + item.product.price * item.quantity,
-        0
+    // Refresh cart every time screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            fetchCart();
+        }, [fetchCart])
     );
+
+    const updateQuantity = async (cartItemId: number, newQuantity: number) => {
+        if (newQuantity < 1) return;
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+        try {
+            await fetch(`${API_URL}/cart/${cartItemId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ quantity: newQuantity }),
+            });
+            // Update locally first for instant feedback
+            setCartItems(prev =>
+                prev.map(item =>
+                    item.id === cartItemId ? { ...item, quantity: newQuantity } : item
+                )
+            );
+            // Recalculate subtotal
+            setSubtotal(prev => {
+                const item = cartItems.find(i => i.id === cartItemId);
+                if (!item) return prev;
+                return prev + item.product.price * (newQuantity - item.quantity);
+            });
+        } catch (e) {
+            console.error('Failed to update quantity', e);
+        }
+    };
+
+    const removeItem = async (cartItemId: number) => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+        try {
+            await fetch(`${API_URL}/cart/${cartItemId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const removed = cartItems.find(i => i.id === cartItemId);
+            setCartItems(prev => prev.filter(item => item.id !== cartItemId));
+            if (removed) {
+                setSubtotal(prev => prev - removed.product.price * removed.quantity);
+            }
+        } catch (e) {
+            console.error('Failed to remove item', e);
+        }
+    };
+
+    const clearCart = () => {
+        Alert.alert('Kosongkan Keranjang?', 'Semua item akan dihapus dari keranjang', [
+            { text: 'Batal', style: 'cancel' },
+            {
+                text: 'Hapus Semua',
+                style: 'destructive',
+                onPress: async () => {
+                    for (const item of cartItems) {
+                        await removeItem(item.id);
+                    }
+                },
+            },
+        ]);
+    };
+
     const delivery = 15000;
     const total = subtotal + delivery;
+
+    if (loading) {
+        return (
+            <View style={[styles.emptyContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
 
     if (cartItems.length === 0) {
         return (
@@ -95,8 +176,8 @@ export default function CartScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={Colors.primaryText} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Cart</Text>
-                <TouchableOpacity onPress={() => setCartItems([])}>
+                <Text style={styles.headerTitle}>Cart ({cartItems.length})</Text>
+                <TouchableOpacity onPress={clearCart}>
                     <Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
             </View>
@@ -104,12 +185,15 @@ export default function CartScreen() {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchCart(); }} />
+                }
             >
                 {/* Cart Items */}
-                {cartItems.map((item, index) => (
-                    <View key={index} style={styles.cartItem}>
+                {cartItems.map((item) => (
+                    <View key={item.id} style={styles.cartItem}>
                         <Image
-                            source={{ uri: item.product.image }}
+                            source={{ uri: item.product.image_url }}
                             style={styles.itemImage}
                         />
                         <View style={styles.itemInfo}>
@@ -117,13 +201,15 @@ export default function CartScreen() {
                                 <Text style={styles.itemName} numberOfLines={1}>
                                     {item.product.name}
                                 </Text>
-                                <TouchableOpacity onPress={() => removeItem(index)}>
+                                <TouchableOpacity onPress={() => removeItem(item.id)}>
                                     <Ionicons name="close" size={18} color={Colors.gray} />
                                 </TouchableOpacity>
                             </View>
-                            <Text style={styles.itemVariant}>
-                                Color: {item.selectedColor} | Size: {item.selectedSize}
-                            </Text>
+                            {item.variant_info ? (
+                                <Text style={styles.itemVariant}>{item.variant_info}</Text>
+                            ) : item.product.category ? (
+                                <Text style={styles.itemVariant}>{item.product.category.name}</Text>
+                            ) : null}
                             <View style={styles.itemFooter}>
                                 <Text style={styles.itemPrice}>
                                     {formatRupiah(item.product.price)}
@@ -131,14 +217,14 @@ export default function CartScreen() {
                                 <View style={styles.quantityContainer}>
                                     <TouchableOpacity
                                         style={styles.quantityButton}
-                                        onPress={() => updateQuantity(index, -1)}
+                                        onPress={() => updateQuantity(item.id, item.quantity - 1)}
                                     >
                                         <Ionicons name="remove" size={16} color={Colors.primaryText} />
                                     </TouchableOpacity>
                                     <Text style={styles.quantityText}>{item.quantity}</Text>
                                     <TouchableOpacity
                                         style={styles.quantityButton}
-                                        onPress={() => updateQuantity(index, 1)}
+                                        onPress={() => updateQuantity(item.id, item.quantity + 1)}
                                     >
                                         <Ionicons name="add" size={16} color={Colors.primaryText} />
                                     </TouchableOpacity>

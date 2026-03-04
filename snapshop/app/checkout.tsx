@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,30 +7,152 @@ import {
     TouchableOpacity,
     TextInput,
     Modal,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../constants/theme';
-import { paymentMethods, storeLocations, courierServices, vouchers } from '../constants/data';
+import { storeLocations, vouchers } from '../constants/data';
+import { API_URL } from '../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AnimatedButton from '../components/AnimatedButton';
 import FadeInView from '../components/FadeInView';
 
 type DeliveryMethod = 'pickup' | 'courier';
+type PaymentMethodType = 'midtrans' | 'cod';
+
+interface ShippingService {
+    courier: string;
+    courier_name: string;
+    service: string;
+    description: string;
+    cost: number;
+    etd: string;
+}
+
+interface UserAddress {
+    id: number;
+    label: string;
+    recipient_name: string;
+    phone: string;
+    street: string;
+    city: string;
+    city_id: number;
+    province: string;
+    postal_code: string;
+    is_default: boolean;
+}
 
 export default function CheckoutScreen() {
     const router = useRouter();
     const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('courier');
     const [selectedStore, setSelectedStore] = useState('1');
-    const [selectedCourier, setSelectedCourier] = useState('2');
-    const [selectedPayment, setSelectedPayment] = useState('2');
+    const [selectedPayment, setSelectedPayment] = useState<PaymentMethodType>('midtrans');
     const [promoCode, setPromoCode] = useState('');
     const [appliedVoucher, setAppliedVoucher] = useState<typeof vouchers[0] | null>(null);
     const [showVouchers, setShowVouchers] = useState(false);
     const [promoError, setPromoError] = useState('');
+    const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-    const subtotal = 3500000;
-    const selectedCourierData = courierServices.find(c => c.id === selectedCourier);
-    const shipping = deliveryMethod === 'pickup' ? 0 : (selectedCourierData?.price || 0);
+    // RajaOngkir courier state
+    const [selectedCourierType, setSelectedCourierType] = useState('jne');
+    const [shippingServices, setShippingServices] = useState<ShippingService[]>([]);
+    const [selectedService, setSelectedService] = useState<ShippingService | null>(null);
+    const [loadingShipping, setLoadingShipping] = useState(false);
+
+    // Address state
+    const [addresses, setAddresses] = useState<UserAddress[]>([]);
+    const [selectedAddress, setSelectedAddress] = useState<UserAddress | null>(null);
+
+    // Cart state
+    const [cartItems, setCartItems] = useState<any[]>([]);
+    const [subtotal, setSubtotal] = useState(0);
+
+    const courierTypes = [
+        { id: 'jne', name: 'JNE', icon: 'cube-outline' },
+        { id: 'tiki', name: 'TIKI', icon: 'airplane-outline' },
+        { id: 'pos', name: 'POS', icon: 'mail-outline' },
+    ];
+
+    // Fetch addresses and cart every time screen focuses (e.g. after adding address)
+    useFocusEffect(
+        useCallback(() => {
+            fetchAddresses();
+            fetchCart();
+        }, [])
+    );
+
+    const fetchAddresses = async () => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_URL}/addresses`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.data) {
+                setAddresses(data.data);
+                const defaultAddr = data.data.find((a: UserAddress) => a.is_default) || data.data[0];
+                if (defaultAddr) setSelectedAddress(defaultAddr);
+            }
+        } catch (e) { console.error('Failed to fetch addresses', e); }
+    };
+
+    const fetchCart = async () => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_URL}/cart`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.data) {
+                const items = data.data.items || [];
+                setCartItems(items);
+                setSubtotal(data.data.subtotal || 0);
+            }
+        } catch (e) { console.error('Failed to fetch cart', e); }
+    };
+
+    // Fetch shipping costs when courier type or address changes (Binderbyte uses city name)
+    const fetchShippingCosts = useCallback(async (courier: string, cityName: string) => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token || !cityName) return;
+        setLoadingShipping(true);
+        setShippingServices([]);
+        setSelectedService(null);
+        try {
+            // Calculate total weight in kg (default 1kg per item)
+            const totalWeightKg = cartItems.reduce((w: number, item: any) => w + item.quantity, 0) || 1;
+            const res = await fetch(`${API_URL}/shipping/cost`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    destination: cityName,
+                    weight: totalWeightKg,
+                    courier,
+                }),
+            });
+            const data = await res.json();
+            if (data.data && Array.isArray(data.data)) {
+                setShippingServices(data.data);
+                if (data.data.length > 0) setSelectedService(data.data[0]);
+            }
+        } catch (e) { console.error('Failed to fetch shipping costs', e); }
+        setLoadingShipping(false);
+    }, [cartItems]);
+
+    useEffect(() => {
+        if (selectedAddress?.city && deliveryMethod === 'courier') {
+            fetchShippingCosts(selectedCourierType, selectedAddress.city);
+        }
+    }, [selectedCourierType, selectedAddress, deliveryMethod]);
+
+    const shipping = deliveryMethod === 'pickup' ? 0 : (selectedService?.cost || 0);
     const voucherDiscount = appliedVoucher
         ? appliedVoucher.discountType === 'percentage'
             ? Math.min((subtotal * appliedVoucher.discountValue) / 100, appliedVoucher.maxDiscount)
@@ -42,6 +164,96 @@ export default function CheckoutScreen() {
     const total = subtotal + shipping + discount;
 
     const selectedStoreData = storeLocations.find(s => s.id === selectedStore);
+
+    // Place order handler
+    const handlePlaceOrder = async () => {
+        if (isPlacingOrder) return;
+        if (!selectedAddress && deliveryMethod === 'courier') {
+            Alert.alert('Error', 'Pilih alamat pengiriman dulu');
+            return;
+        }
+        if (deliveryMethod === 'courier' && !selectedService) {
+            Alert.alert('Error', 'Pilih kurir pengiriman dulu');
+            return;
+        }
+        if (subtotal === 0) {
+            Alert.alert('Error', 'Keranjang masih kosong');
+            return;
+        }
+
+        setIsPlacingOrder(true);
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+            setIsPlacingOrder(false);
+            router.push('/login');
+            return;
+        }
+
+        try {
+            const body: any = {
+                address_id: selectedAddress?.id || 1,
+                courier_name: selectedService?.courier_name || 'Pickup',
+                courier_service: selectedService?.service || '',
+                shipping_cost: shipping,
+                voucher_code: appliedVoucher?.code || '',
+                notes: '',
+                payment_method: selectedPayment,
+            };
+
+            if (deliveryMethod === 'pickup') {
+                body.store_id = parseInt(selectedStore);
+                body.courier_name = 'Store Pickup';
+                body.shipping_cost = 0;
+            }
+
+            const res = await fetch(`${API_URL}/orders`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                Alert.alert('Error', data.message || 'Gagal membuat order');
+                setIsPlacingOrder(false);
+                return;
+            }
+
+            const order = data.data?.order;
+
+            if (selectedPayment === 'midtrans' && order) {
+                // Get Midtrans Snap token
+                const tokenRes = await fetch(`${API_URL}/payment/${order.id}/token`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const tokenData = await tokenRes.json();
+
+                if (tokenData.data?.redirect_url) {
+                    router.push({
+                        pathname: '/payment-webview',
+                        params: {
+                            url: tokenData.data.redirect_url,
+                            orderId: String(order.id),
+                            orderNumber: order.order_number,
+                        },
+                    });
+                } else {
+                    // Fallback if no redirect URL
+                    router.push('/order-success');
+                }
+            } else {
+                // COD — go to success
+                router.push('/order-success');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Terjadi kesalahan jaringan');
+        }
+        setIsPlacingOrder(false);
+    };
 
     return (
         <View style={styles.container}>
@@ -186,99 +398,171 @@ export default function CheckoutScreen() {
                                     <Ionicons name="create-outline" size={18} color={Colors.primaryText} />
                                 </TouchableOpacity>
                             </View>
-                            <View style={styles.addressCard}>
-                                <View style={styles.addressIcon}>
-                                    <Ionicons name="location" size={20} color={Colors.primaryText} />
+                            {selectedAddress ? (
+                                <View style={styles.addressCard}>
+                                    <View style={styles.addressIcon}>
+                                        <Ionicons name="location" size={20} color={Colors.primaryText} />
+                                    </View>
+                                    <View style={styles.addressInfo}>
+                                        <Text style={styles.addressName}>
+                                            {selectedAddress.recipient_name} • {selectedAddress.label || 'Alamat'}
+                                        </Text>
+                                        <Text style={styles.addressDetail}>
+                                            {selectedAddress.street}, {selectedAddress.city}, {selectedAddress.province}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View style={styles.addressInfo}>
-                                    <Text style={styles.addressName}>Moon Road, West Subidbazar</Text>
-                                    <Text style={styles.addressDetail}>Sylhet, Bangladesh</Text>
-                                </View>
-                            </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.addressCard, { justifyContent: 'center' }]}
+                                    onPress={() => router.push('/add-address')}
+                                >
+                                    <Ionicons name="add-circle" size={24} color={Colors.primary} />
+                                    <Text style={[styles.addressName, { color: Colors.primary, marginLeft: 8 }]}>
+                                        Tambah Alamat
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
 
-                        {/* Courier Selection */}
+                        {/* Courier Type Selection */}
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Select Courier</Text>
-                            <View style={styles.courierList}>
-                                {courierServices.map((service) => (
+                            <Text style={styles.sectionTitle}>Pilih Kurir</Text>
+                            <View style={styles.courierTypeRow}>
+                                {courierTypes.map((ct) => (
                                     <TouchableOpacity
-                                        key={service.id}
+                                        key={ct.id}
                                         style={[
-                                            styles.courierCard,
-                                            selectedCourier === service.id && styles.courierCardActive,
+                                            styles.courierTypeBtn,
+                                            selectedCourierType === ct.id && styles.courierTypeBtnActive,
                                         ]}
-                                        onPress={() => setSelectedCourier(service.id)}
+                                        onPress={() => setSelectedCourierType(ct.id)}
                                         activeOpacity={0.7}
                                     >
-                                        <View style={styles.courierLeft}>
-                                            <View style={[
-                                                styles.courierIcon,
-                                                selectedCourier === service.id && styles.courierIconActive,
-                                            ]}>
-                                                <Ionicons
-                                                    name={service.icon as any}
-                                                    size={18}
-                                                    color={selectedCourier === service.id ? Colors.white : Colors.primaryText}
-                                                />
-                                            </View>
-                                            <View>
-                                                <Text style={styles.courierName}>{service.name}</Text>
-                                                <Text style={styles.courierEta}>
-                                                    <Ionicons name="time-outline" size={11} color={Colors.secondaryText} />
-                                                    {' '}{service.estimatedDays}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <View style={styles.courierRight}>
-                                            <Text style={[
-                                                styles.courierPrice,
-                                                selectedCourier === service.id && styles.courierPriceActive,
-                                            ]}>
-                                                Rp{service.price.toLocaleString()}
-                                            </Text>
-                                            <View style={[
-                                                styles.radio,
-                                                selectedCourier === service.id && styles.radioSelected,
-                                            ]}>
-                                                {selectedCourier === service.id && (
-                                                    <View style={styles.radioInner} />
-                                                )}
-                                            </View>
-                                        </View>
+                                        <Ionicons name={ct.icon as any} size={16} color={selectedCourierType === ct.id ? Colors.primary : Colors.primaryText} />
+                                        <Text style={[styles.courierTypeName, selectedCourierType === ct.id && { color: Colors.primary }]}>{ct.name}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
+
+                            {/* Service Options */}
+                            {loadingShipping ? (
+                                <View style={{ padding: 20, alignItems: 'center' }}>
+                                    <ActivityIndicator color={Colors.primary} />
+                                    <Text style={[styles.courierEta, { marginTop: 8 }]}>Menghitung ongkir...</Text>
+                                </View>
+                            ) : shippingServices.length > 0 ? (
+                                <View style={styles.courierList}>
+                                    {shippingServices.map((svc, idx) => (
+                                        <TouchableOpacity
+                                            key={`${svc.courier}-${svc.service}-${idx}`}
+                                            style={[
+                                                styles.courierCard,
+                                                selectedService?.service === svc.service && selectedService?.courier === svc.courier && styles.courierCardActive,
+                                            ]}
+                                            onPress={() => setSelectedService(svc)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View style={styles.courierLeft}>
+                                                <View style={[
+                                                    styles.courierIcon,
+                                                    selectedService?.service === svc.service && selectedService?.courier === svc.courier && styles.courierIconActive,
+                                                ]}>
+                                                    <Ionicons
+                                                        name="cube-outline"
+                                                        size={18}
+                                                        color={selectedService?.service === svc.service && selectedService?.courier === svc.courier ? Colors.white : Colors.primaryText}
+                                                    />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.courierName} numberOfLines={1}>{svc.courier_name}</Text>
+                                                    <Text style={styles.courierServiceName} numberOfLines={1}>{svc.service} — {svc.description || svc.etd}</Text>
+                                                    <Text style={styles.courierEta}>
+                                                        <Ionicons name="time-outline" size={11} color={Colors.secondaryText} />
+                                                        {' '}{svc.etd}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.courierRight}>
+                                                <Text style={[
+                                                    styles.courierPrice,
+                                                    selectedService?.service === svc.service && selectedService?.courier === svc.courier && styles.courierPriceActive,
+                                                ]}>
+                                                    {formatRupiah(svc.cost)}
+                                                </Text>
+                                                <View style={[
+                                                    styles.radio,
+                                                    selectedService?.service === svc.service && selectedService?.courier === svc.courier && styles.radioSelected,
+                                                ]}>
+                                                    {selectedService?.service === svc.service && selectedService?.courier === svc.courier && (
+                                                        <View style={styles.radioInner} />
+                                                    )}
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            ) : selectedAddress?.city ? (
+                                <Text style={[styles.courierEta, { textAlign: 'center', padding: 16 }]}>
+                                    Tidak ada layanan tersedia untuk kota ini
+                                </Text>
+                            ) : (
+                                <Text style={[styles.courierEta, { textAlign: 'center', padding: 16 }]}>
+                                    Tambah alamat untuk melihat ongkir
+                                </Text>
+                            )}
                         </View>
                     </>
                 )}
 
                 {/* Payment Method */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Payment Method</Text>
+                    <Text style={styles.sectionTitle}>Metode Pembayaran</Text>
                     <View style={styles.paymentList}>
-                        {paymentMethods.map((method) => (
-                            <TouchableOpacity
-                                key={method.id}
-                                style={styles.paymentItem}
-                                onPress={() => setSelectedPayment(method.id)}
-                            >
-                                <View style={styles.paymentLeft}>
-                                    <View style={styles.paymentIcon}>
-                                        <Ionicons name={method.icon as any} size={20} color={Colors.primaryText} />
-                                    </View>
-                                    <Text style={styles.paymentName}>{method.name}</Text>
+                        <TouchableOpacity
+                            style={styles.paymentItem}
+                            onPress={() => setSelectedPayment('midtrans')}
+                        >
+                            <View style={styles.paymentLeft}>
+                                <View style={[styles.paymentIcon, selectedPayment === 'midtrans' && { backgroundColor: '#0078D4' }]}>
+                                    <Ionicons name="card" size={20} color={selectedPayment === 'midtrans' ? Colors.white : Colors.primaryText} />
                                 </View>
-                                <View style={[
-                                    styles.radio,
-                                    selectedPayment === method.id && styles.radioSelected,
-                                ]}>
-                                    {selectedPayment === method.id && (
-                                        <View style={styles.radioInner} />
-                                    )}
+                                <View>
+                                    <Text style={styles.paymentName}>Bayar Online</Text>
+                                    <Text style={[styles.courierEta, { marginTop: 1 }]}>Midtrans — VA, E-Wallet, Credit Card</Text>
                                 </View>
-                            </TouchableOpacity>
-                        ))}
+                            </View>
+                            <View style={[
+                                styles.radio,
+                                selectedPayment === 'midtrans' && styles.radioSelected,
+                            ]}>
+                                {selectedPayment === 'midtrans' &&
+                                    <View style={styles.radioInner} />
+                                }
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.paymentItem}
+                            onPress={() => setSelectedPayment('cod')}
+                        >
+                            <View style={styles.paymentLeft}>
+                                <View style={[styles.paymentIcon, selectedPayment === 'cod' && { backgroundColor: '#25D366' }]}>
+                                    <Ionicons name="cash" size={20} color={selectedPayment === 'cod' ? Colors.white : Colors.primaryText} />
+                                </View>
+                                <View>
+                                    <Text style={styles.paymentName}>Cash on Delivery</Text>
+                                    <Text style={[styles.courierEta, { marginTop: 1 }]}>Bayar saat barang sampai</Text>
+                                </View>
+                            </View>
+                            <View style={[
+                                styles.radio,
+                                selectedPayment === 'cod' && styles.radioSelected,
+                            ]}>
+                                {selectedPayment === 'cod' &&
+                                    <View style={styles.radioInner} />
+                                }
+                            </View>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -438,9 +722,13 @@ export default function CheckoutScreen() {
                     <Text style={styles.bottomTotalValue}>{formatRupiah(total)}</Text>
                 </View>
                 <AnimatedButton
-                    onPress={() => router.push('/order-success')}
-                    title={deliveryMethod === 'pickup' ? 'Place Order — Pickup' : 'Place Order — Delivery'}
-                    style={styles.placeOrderButton}
+                    onPress={handlePlaceOrder}
+                    title={isPlacingOrder ? 'Memproses...' : (
+                        selectedPayment === 'midtrans'
+                            ? (deliveryMethod === 'pickup' ? 'Bayar — Pickup' : 'Bayar — Delivery')
+                            : (deliveryMethod === 'pickup' ? 'Order COD — Pickup' : 'Order COD — Delivery')
+                    )}
+                    style={{ ...styles.placeOrderButton, ...(isPlacingOrder ? { opacity: 0.6 } : {}) }}
                     textStyle={styles.placeOrderText}
                 />
             </View>
@@ -641,6 +929,33 @@ const styles = StyleSheet.create({
     courierList: {
         gap: 8,
     },
+    courierTypeRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 14,
+    },
+    courierTypeBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 14,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.white,
+    },
+    courierTypeBtnActive: {
+        borderColor: Colors.primary,
+        backgroundColor: '#F5F0FF',
+    },
+    courierTypeName: {
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: FontSize.sm,
+        color: Colors.primaryText,
+    },
     courierCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -649,6 +964,7 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.border,
         borderRadius: BorderRadius.lg,
+        gap: 12,
     },
     courierCardActive: {
         borderColor: Colors.primary,
@@ -658,6 +974,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        flex: 1,
     },
     courierIcon: {
         width: 36,
@@ -666,14 +983,21 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.lightGray,
         justifyContent: 'center',
         alignItems: 'center',
+        flexShrink: 0,
     },
     courierIconActive: {
         backgroundColor: Colors.primary,
     },
     courierName: {
-        fontFamily: 'Inter_500Medium',
-        fontSize: FontSize.md,
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: FontSize.sm,
         color: Colors.primaryText,
+    },
+    courierServiceName: {
+        fontFamily: 'Inter_400Regular',
+        fontSize: FontSize.xs,
+        color: Colors.secondaryText,
+        marginTop: 1,
     },
     courierEta: {
         fontFamily: 'Inter_400Regular',
@@ -682,12 +1006,12 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     courierRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
+        alignItems: 'flex-end',
+        gap: 6,
+        flexShrink: 0,
     },
     courierPrice: {
-        fontFamily: 'Inter_600SemiBold',
+        fontFamily: 'Inter_700Bold',
         fontSize: FontSize.sm,
         color: Colors.primaryText,
     },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -14,18 +14,62 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import FadeInView from '../components/FadeInView';
 import AnimatedButton from '../components/AnimatedButton';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../constants/api';
 
 export default function EditProfileScreen() {
     const router = useRouter();
-    const [name, setName] = useState('John Doe');
-    const [email, setEmail] = useState('john.doe@email.com');
-    const [phone, setPhone] = useState('+62 812 3456 7890');
-    const [bio, setBio] = useState('Fashion enthusiast 🛍️');
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [bio, setBio] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleSave = () => {
-        Alert.alert('Success', 'Profile updated successfully!', [
-            { text: 'OK', onPress: () => router.back() },
-        ]);
+    useEffect(() => {
+        AsyncStorage.getItem('user').then((data) => {
+            if (data) {
+                const u = JSON.parse(data);
+                setName(u.name || '');
+                setEmail(u.email || '');
+                setPhone(u.phone || '');
+                setBio(u.bio || '');
+                setAvatarUrl(u.avatar_url || '');
+            }
+        });
+    }, []);
+
+    const handleSave = async () => {
+        setLoading(true);
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const res = await fetch(`${API_URL}/user/profile`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ name, phone, bio }),
+            });
+            const json = await res.json();
+            if (res.ok) {
+                // Update AsyncStorage with new data
+                const userData = await AsyncStorage.getItem('user');
+                if (userData) {
+                    const u = JSON.parse(userData);
+                    u.name = name;
+                    u.phone = phone;
+                    u.bio = bio;
+                    await AsyncStorage.setItem('user', JSON.stringify(u));
+                }
+                Alert.alert('Berhasil', 'Profil berhasil diperbarui!', [
+                    { text: 'OK', onPress: () => router.back() },
+                ]);
+            } else {
+                Alert.alert('Error', json.error || 'Gagal menyimpan profil');
+            }
+        } catch (e: any) {
+            Alert.alert('Error', e.message || 'Terjadi kesalahan');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -44,7 +88,7 @@ export default function EditProfileScreen() {
                     <View style={styles.avatarSection}>
                         <View style={styles.avatarContainer}>
                             <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
+                                source={{ uri: avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop' }}
                                 style={styles.avatar}
                             />
                             <TouchableOpacity style={styles.cameraButton}>
@@ -73,13 +117,11 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldGroup}>
                         <Text style={styles.fieldLabel}>Email</Text>
                         <TextInput
-                            style={styles.fieldInput}
+                            style={[styles.fieldInput, { color: Colors.gray }]}
                             value={email}
-                            onChangeText={setEmail}
-                            placeholder="Enter your email"
+                            editable={false}
+                            placeholder="Email"
                             placeholderTextColor={Colors.gray}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
                         />
                     </View>
                 </FadeInView>
@@ -115,7 +157,7 @@ export default function EditProfileScreen() {
 
                 {/* Change Password */}
                 <FadeInView delay={300}>
-                    <TouchableOpacity style={styles.changePasswordBtn}>
+                    <TouchableOpacity style={styles.changePasswordBtn} onPress={() => router.push('/change-password')}>
                         <Ionicons name="lock-closed-outline" size={20} color={Colors.primaryText} />
                         <Text style={styles.changePasswordText}>Change Password</Text>
                         <Ionicons name="chevron-forward" size={18} color={Colors.gray} />

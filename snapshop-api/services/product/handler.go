@@ -21,7 +21,7 @@ func (h *Handler) List(c *gin.Context) {
 		query = query.Where("category_id = ?", cat)
 	}
 	if search := c.Query("search"); search != "" {
-		query = query.Where("name LIKE ?", "%"+search+"%")
+		query = query.Where("LOWER(name) LIKE LOWER(?)", "%"+search+"%")
 	}
 	if minPrice := c.Query("min_price"); minPrice != "" {
 		query = query.Where("price >= ?", minPrice)

@@ -12,7 +12,9 @@ import (
 	commerceSvc "snapshop-api/services/commerce"
 	financeSvc "snapshop-api/services/finance"
 	orderSvc "snapshop-api/services/order"
+	paymentSvc "snapshop-api/services/payment"
 	productSvc "snapshop-api/services/product"
+	shippingSvc "snapshop-api/services/shipping"
 	uploadSvc "snapshop-api/services/upload"
 	userSvc "snapshop-api/services/user"
 	warehouseSvc "snapshop-api/services/warehouse"
@@ -44,6 +46,8 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
 	financeH := &financeSvc.FinanceHandler{}
 	crmH := &financeSvc.CRMHandler{}
 	uploadH := &uploadSvc.Handler{}
+	paymentH := &paymentSvc.Handler{Config: cfg}
+	shippingH := &shippingSvc.Handler{Config: cfg}
 
 	api := r.Group("/api/v1")
 	{
@@ -59,6 +63,12 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
 		api.GET("/products/:id/reviews", productH.GetReviews)
 		api.GET("/categories", productH.ListCategories)
 		api.GET("/stores", storeH.ListStores)
+
+		// Midtrans webhook (no auth — called by Midtrans server)
+		api.POST("/payment/webhook", paymentH.Webhook)
+
+		// Midtrans client key (public — needed by frontend)
+		api.GET("/payment/client-key", paymentH.GetClientKey)
 
 		// ====== AUTHENTICATED (All roles) ======
 		authenticated := api.Group("/")
@@ -92,6 +102,15 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
 			authenticated.POST("orders", orderH.Checkout)
 			authenticated.GET("orders", orderH.List)
 			authenticated.GET("orders/:id", orderH.GetByID)
+
+			// Payment Service
+			authenticated.POST("payment/:order_id/token", paymentH.CreateSnapToken)
+			authenticated.POST("payment/:order_id/verify", paymentH.VerifyPayment)
+			authenticated.GET("payment/:order_id/status", paymentH.GetPaymentStatus)
+
+			// Shipping Service (Binderbyte)
+			authenticated.GET("shipping/couriers", shippingH.GetCouriers)
+			authenticated.POST("shipping/cost", shippingH.GetShippingCost)
 
 			// Commerce Service (Vouchers)
 			authenticated.GET("vouchers", voucherH.List)
@@ -141,6 +160,7 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/products/:id", productH.Delete)
 
 			// Order Service (Admin)
+			admin.GET("/orders", orderH.ListAll)
 			admin.PUT("/orders/:id/status", orderH.UpdateStatus)
 
 			// Commerce Service (Admin Vouchers)
@@ -170,15 +190,33 @@ func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
 			// Finance Service (CRM)
 			admin.GET("/crm/customers", crmH.CustomerList)
 			admin.GET("/crm/customers/:id", crmH.CustomerDetail)
+
+			// Store Management (Admin)
+			admin.POST("/stores", storeH.CreateStore)
+			admin.PUT("/stores/:id", storeH.UpdateStore)
+			admin.DELETE("/stores/:id", storeH.DeleteStore)
+			admin.GET("/stores/:id/stock", storeH.GetStoreStock)
+			admin.GET("/stores/transfers", storeH.ListTransfers)
+			admin.POST("/stores/sell-offline", storeH.SellOffline)
+			admin.POST("/stores/add-stock", storeH.AddStoreStock)
 		}
 
 		// ====== SUPER ADMIN (Level 6) ======
 		superadmin := api.Group("/superadmin")
 		superadmin.Use(middleware.AuthRequired(cfg))
 		superadmin.Use(middleware.RoleRequired(models.RoleSuperAdmin))
-		{
+	{
 			superadmin.PUT("/users/:id/role", superadminH.UpdateUserRole)
+			superadmin.PUT("/users/:id/password", superadminH.ResetUserPassword)
+			superadmin.DELETE("/users/:id", superadminH.DeleteUser)
+			superadmin.GET("/password-requests", superadminH.ListPasswordRequests)
+			superadmin.POST("/password-requests/:id/approve", superadminH.ApprovePasswordRequest)
+			superadmin.POST("/password-requests/:id/reject", superadminH.RejectPasswordRequest)
 			superadmin.GET("/audit-logs", superadminH.AuditLogs)
+			superadmin.GET("/audit-stats", superadminH.AuditStats)
 		}
+
+		// Staff password request (any authenticated admin-level user)
+		admin.POST("/request-password-reset", adminH.RequestPasswordReset)
 	}
 }

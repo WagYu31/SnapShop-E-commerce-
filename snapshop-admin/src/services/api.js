@@ -54,12 +54,17 @@ class ApiService {
     getCategories() { return this.request('GET', '/categories'); }
 
     // Orders
-    getOrders(params = '') { return this.request('GET', `/orders${params}`); }
+    getOrders(params = '') { return this.request('GET', `/admin/orders${params}`); }
     updateOrderStatus(id, status) { return this.request('PUT', `/admin/orders/${id}/status`, { status }); }
 
     // Users
     getUsers(params = '') { return this.request('GET', `/admin/users${params}`); }
     updateUserRole(id, role) { return this.request('PUT', `/superadmin/users/${id}/role`, { role }); }
+    deleteUser(id) { return this.request('DELETE', `/superadmin/users/${id}`); }
+    resetUserPassword(id, new_password) { return this.request('PUT', `/superadmin/users/${id}/password`, { new_password }); }
+    getPasswordRequests(status = 'pending') { return this.request('GET', `/superadmin/password-requests?status=${status}`); }
+    approvePasswordRequest(id, new_password, admin_notes = '') { return this.request('POST', `/superadmin/password-requests/${id}/approve`, { new_password, admin_notes }); }
+    rejectPasswordRequest(id, admin_notes = '') { return this.request('POST', `/superadmin/password-requests/${id}/reject`, { admin_notes }); }
 
     // Vouchers
     getVouchers() { return this.request('GET', '/vouchers'); }
@@ -75,10 +80,18 @@ class ApiService {
 
     // Stores
     getStores() { return this.request('GET', '/stores'); }
+    createStore(data) { return this.request('POST', '/admin/stores', data); }
+    updateStore(id, data) { return this.request('PUT', `/admin/stores/${id}`, data); }
+    deleteStore(id) { return this.request('DELETE', `/admin/stores/${id}`); }
+    getStoreStock(storeId) { return this.request('GET', `/admin/stores/${storeId}/stock`); }
+    getTransfers(q = '') { return this.request('GET', `/admin/stores/transfers${q}`); }
+    sellOffline(data) { return this.request('POST', '/admin/stores/sell-offline', data); }
+    addStoreStock(data) { return this.request('POST', '/admin/stores/add-stock', data); }
     transferStock(data) { return this.request('POST', '/store/transfer', data); }
 
     // Audit
     getAuditLogs(params = '') { return this.request('GET', `/superadmin/audit-logs${params}`); }
+    getAuditStats() { return this.request('GET', '/superadmin/audit-stats'); }
 
     // Reports
     getSalesReport(period = 30) { return this.request('GET', `/admin/reports/sales?period=${period}`); }

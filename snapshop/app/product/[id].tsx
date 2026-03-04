@@ -10,11 +10,14 @@ import {
     NativeSyntheticEvent,
     NativeScrollEvent,
     Share,
+    Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../../constants/theme';
 import { products, productReviews } from '../../constants/data';
+import { API_URL } from '../../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AnimatedButton from '../../components/AnimatedButton';
 import FadeInView from '../../components/FadeInView';
 
@@ -40,6 +43,45 @@ export default function ProductDetailScreen() {
     const [sizeUnit, setSizeUnit] = useState<'EU' | 'US' | 'UK'>('EU');
     const [isFavorite, setIsFavorite] = useState(false);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const [addingToCart, setAddingToCart] = useState(false);
+
+    const handleAddToCart = async () => {
+        try {
+            setAddingToCart(true);
+            const token = await AsyncStorage.getItem('token');
+            if (!token) {
+                Alert.alert('Login Required', 'Silakan login terlebih dahulu', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Login', onPress: () => router.push('/login') },
+                ]);
+                return;
+            }
+            const res = await fetch(`${API_URL}/cart`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    product_id: parseInt(product.id),
+                    quantity: 1,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                Alert.alert('Berhasil! ✓', `${product.name} ditambahkan ke keranjang`, [
+                    { text: 'Lanjut Belanja', style: 'cancel' },
+                    { text: 'Lihat Cart', onPress: () => router.push('/(tabs)/cart') },
+                ]);
+            } else {
+                Alert.alert('Gagal', data.message || 'Gagal menambahkan ke keranjang');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Gagal terhubung ke server');
+        } finally {
+            setAddingToCart(false);
+        }
+    };
     const imageScrollRef = useRef<ScrollView>(null);
 
     const sizes = product.sizes || ['S', 'M', 'L', 'XL'];
@@ -270,8 +312,9 @@ export default function ProductDetailScreen() {
             {/* Bottom Add to Cart */}
             <View style={styles.bottomBar}>
                 <AnimatedButton
-                    onPress={() => { }}
-                    title="Add to Cart"
+                    onPress={handleAddToCart}
+                    disabled={addingToCart}
+                    title={addingToCart ? 'Adding...' : 'Add to Cart'}
                     style={styles.addToCartButton}
                     textStyle={styles.addToCartText}
                 />

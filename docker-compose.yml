@@ -33,6 +33,13 @@ services:
       PORT: "8080"
       DATABASE_URL: "postgres://snapshop:snapshop123@postgres:5432/snapshop?sslmode=disable"
       JWT_SECRET: "snapshop-jwt-secret-production-2026"
+      # Midtrans Payment Gateway (Sandbox)
+      MIDTRANS_SERVER_KEY: "${MIDTRANS_SERVER_KEY:-Mid-server-KAbrho23wovIVChp-hGjUvIb}"
+      MIDTRANS_CLIENT_KEY: "${MIDTRANS_CLIENT_KEY:-Mid-client-mGA7v04cXrux3KNF}"
+      MIDTRANS_IS_PRODUCTION: "${MIDTRANS_IS_PRODUCTION:-false}"
+      # Binderbyte Shipping
+      BINDERBYTE_API_KEY: "${BINDERBYTE_API_KEY:-1d6b3b638c7cc45a0b980e7c4176e6b1308051896c6956b848b1e1dc61a2369d}"
+      BINDERBYTE_ORIGIN_CITY: "${BINDERBYTE_ORIGIN_CITY:-Jakarta Pusat}"
     volumes:
       - ./uploads:/app/uploads
     depends_on:

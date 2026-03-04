@@ -57,6 +57,7 @@ func Init(cfg *config.Config) {
 		&models.Return{},
 		&models.PurchaseOrder{},
 		&models.PurchaseOrderItem{},
+		&models.PasswordResetRequest{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)

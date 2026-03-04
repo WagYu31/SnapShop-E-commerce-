@@ -6,9 +6,10 @@ interface Props {
     lat: number;
     lng: number;
     mapRef: React.RefObject<any>;
+    onRegionChangeComplete?: (region: any) => void;
 }
 
-export default function MapComponent({ lat, lng, mapRef }: Props) {
+export default function MapComponent({ lat, lng, mapRef, onRegionChangeComplete }: Props) {
     return (
         <MapView
             ref={mapRef}
@@ -19,11 +20,17 @@ export default function MapComponent({ lat, lng, mapRef }: Props) {
                 latitudeDelta: 0.01,
                 longitudeDelta: 0.01,
             }}
-            showsUserLocation={false}
-            showsCompass={false}
-            showsScale={false}
-            toolbarEnabled={false}
-            zoomControlEnabled={false}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+            showsCompass={true}
+            showsScale={true}
+            toolbarEnabled={true}
+            zoomControlEnabled={true}
+            zoomEnabled={true}
+            scrollEnabled={true}
+            rotateEnabled={true}
+            pitchEnabled={true}
+            onRegionChangeComplete={onRegionChangeComplete}
         />
     );
 }

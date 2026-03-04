@@ -47,7 +47,7 @@ func (h *Handler) Inbound(c *gin.Context) {
 		ProductID        uint   `json:"product_id" binding:"required"`
 		ProductVariantID uint   `json:"product_variant_id"`
 		Quantity         int    `json:"quantity" binding:"required,min=1"`
-		CostPrice        int    `json:"cost_price" binding:"required"`
+		CostPrice        int    `json:"cost_price"`
 		SupplierID       *uint  `json:"supplier_id"`
 		BatchNumber      string `json:"batch_number"`
 	}
@@ -91,8 +91,131 @@ func (h *Handler) LowStockAlerts(c *gin.Context) {
 
 func (h *StoreHandler) ListStores(c *gin.Context) {
 	var stores []models.Store
-	database.DB.Where("is_active = ?", true).Find(&stores)
+	database.DB.Find(&stores)
 	utils.Success(c, stores)
+}
+
+func (h *StoreHandler) CreateStore(c *gin.Context) {
+	var input struct {
+		Name      string  `json:"name" binding:"required"`
+		Address   string  `json:"address"`
+		City      string  `json:"city"`
+		Hours     string  `json:"hours"`
+		Phone     string  `json:"phone"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+	store := models.Store{
+		Name: input.Name, Address: input.Address, City: input.City,
+		Hours: input.Hours, Phone: input.Phone,
+		Latitude: input.Latitude, Longitude: input.Longitude, IsActive: true,
+	}
+	database.DB.Create(&store)
+	utils.Success(c, store)
+}
+
+func (h *StoreHandler) UpdateStore(c *gin.Context) {
+	id := c.Param("id")
+	var store models.Store
+	if err := database.DB.First(&store, id).Error; err != nil {
+		utils.Error(c, 404, "Store not found")
+		return
+	}
+	var input struct {
+		Name      string  `json:"name"`
+		Address   string  `json:"address"`
+		City      string  `json:"city"`
+		Hours     string  `json:"hours"`
+		Phone     string  `json:"phone"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+		IsActive  *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+	if input.Name != "" { store.Name = input.Name }
+	if input.Address != "" { store.Address = input.Address }
+	if input.City != "" { store.City = input.City }
+	if input.Hours != "" { store.Hours = input.Hours }
+	if input.Phone != "" { store.Phone = input.Phone }
+	if input.Latitude != 0 { store.Latitude = input.Latitude }
+	if input.Longitude != 0 { store.Longitude = input.Longitude }
+	if input.IsActive != nil { store.IsActive = *input.IsActive }
+	database.DB.Save(&store)
+	utils.Success(c, store)
+}
+
+func (h *StoreHandler) DeleteStore(c *gin.Context) {
+	id := c.Param("id")
+	database.DB.Delete(&models.Store{}, id)
+	utils.Success(c, nil)
+}
+
+func (h *StoreHandler) GetStoreStock(c *gin.Context) {
+	storeID := c.Param("id")
+	var stocks []models.StoreStock
+	database.DB.Preload("Product").Where("store_id = ?", storeID).Find(&stocks)
+	utils.Success(c, stocks)
+}
+
+func (h *StoreHandler) ListTransfers(c *gin.Context) {
+	var transfers []models.StockTransfer
+	query := database.DB
+	if storeID := c.Query("store_id"); storeID != "" {
+		query = query.Where("store_id = ?", storeID)
+	}
+	query.Order("created_at DESC").Limit(50).Find(&transfers)
+	utils.Success(c, transfers)
+}
+
+func (h *StoreHandler) SellOffline(c *gin.Context) {
+	var input struct {
+		StoreID   uint `json:"store_id" binding:"required"`
+		ProductID uint `json:"product_id" binding:"required"`
+		Quantity  int  `json:"quantity" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+	var storeStock models.StoreStock
+	if err := database.DB.Where("store_id = ? AND product_id = ?", input.StoreID, input.ProductID).First(&storeStock).Error; err != nil {
+		utils.Error(c, 404, "Produk tidak ada di toko ini")
+		return
+	}
+	if storeStock.Quantity < input.Quantity {
+		utils.Error(c, 400, "Stok tidak cukup")
+		return
+	}
+	database.DB.Model(&storeStock).Update("quantity", storeStock.Quantity-input.Quantity)
+	utils.Success(c, gin.H{"message": "Penjualan offline berhasil", "remaining_stock": storeStock.Quantity - input.Quantity})
+}
+
+func (h *StoreHandler) AddStoreStock(c *gin.Context) {
+	var input struct {
+		StoreID   uint `json:"store_id" binding:"required"`
+		ProductID uint `json:"product_id" binding:"required"`
+		Quantity  int  `json:"quantity" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+	var storeStock models.StoreStock
+	if err := database.DB.Where("store_id = ? AND product_id = ?", input.StoreID, input.ProductID).First(&storeStock).Error; err != nil {
+		storeStock = models.StoreStock{StoreID: input.StoreID, ProductID: input.ProductID, Quantity: input.Quantity}
+		database.DB.Create(&storeStock)
+	} else {
+		storeStock.Quantity += input.Quantity
+		database.DB.Save(&storeStock)
+	}
+	utils.Success(c, gin.H{"message": "Stok berhasil ditambahkan", "total_stock": storeStock.Quantity})
 }
 
 func (h *StoreHandler) TransferStock(c *gin.Context) {

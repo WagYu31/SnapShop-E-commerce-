@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,248 +7,391 @@ import {
     ScrollView,
     Image,
     Platform,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
+import { Colors, FontSize, Spacing, BorderRadius, formatRupiah } from '../constants/theme';
+import { API_URL } from '../constants/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const timelineSteps = [
-    {
-        label: 'Order Confirmed',
-        date: '8:00 PM, May 28 2021',
-        status: 'completed' as const,
-    },
-    {
-        label: 'Preparing',
-        date: '2:00 PM, May 29 2021',
-        status: 'completed' as const,
-    },
-    {
-        label: 'Shipped',
-        date: '5:00 PM, May 30 2021',
-        status: 'current' as const,
-    },
-    {
-        label: 'Delivered',
-        date: 'Estimated: June 1 2021',
-        status: 'pending' as const,
-    },
-];
+interface OrderItem {
+    id: number;
+    product_id: number;
+    quantity: number;
+    price: number;
+    variant_info?: string;
+    product?: {
+        name: string;
+        image_url?: string;
+        images?: { url: string }[];
+    };
+}
 
-const getStepColor = (status: string) => {
-    switch (status) {
-        case 'completed':
-            return Colors.green;
-        case 'current':
-            return '#F59E0B';
-        default:
-            return Colors.border;
-    }
+interface OrderAddress {
+    label: string;
+    recipient_name: string;
+    phone: string;
+    street: string;
+    city: string;
+    province: string;
+    postal_code: string;
+}
+
+interface OrderData {
+    id: number;
+    order_number: string;
+    status: string;
+    subtotal: number;
+    shipping_cost: number;
+    discount: number;
+    total: number;
+    courier_name: string;
+    courier_service: string;
+    payment_method: string;
+    notes: string;
+    created_at: string;
+    updated_at: string;
+    address: OrderAddress;
+    items: OrderItem[];
+}
+
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+    'waiting_payment': { label: 'Menunggu Pembayaran', color: '#F59E0B' },
+    'paid': { label: 'Sudah Dibayar', color: '#6366F1' },
+    'confirmed': { label: 'Dikonfirmasi', color: '#6366F1' },
+    'processing': { label: 'Sedang Diproses', color: '#3B82F6' },
+    'shipped': { label: 'Sedang Dikirim', color: '#F59E0B' },
+    'delivered': { label: 'Diterima', color: '#22C55E' },
+    'completed': { label: 'Selesai', color: '#22C55E' },
+    'cancelled': { label: 'Dibatalkan', color: '#EF4444' },
 };
 
-const getStepIcon = (status: string) => {
-    if (status === 'completed') return 'checkmark';
-    if (status === 'current') return 'ellipse';
-    return 'ellipse-outline';
+const TIMELINE_STEPS = [
+    'waiting_payment',
+    'paid',
+    'confirmed',
+    'processing',
+    'shipped',
+    'delivered',
+    'returned',
+];
+
+const TIMELINE_LABELS: Record<string, string> = {
+    'waiting_payment': 'Pesanan Dibuat',
+    'paid': 'Sudah Dibayar',
+    'confirmed': 'Dikonfirmasi',
+    'processing': 'Sedang Diproses',
+    'shipped': 'Sedang Dikirim',
+    'delivered': 'Diterima',
+    'returned': 'Retur Diajukan',
+};
+
+const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const hours = d.getHours().toString().padStart(2, '0');
+    const mins = d.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${mins}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const getPaymentLabel = (method: string) => {
+    switch (method) {
+        case 'midtrans': return 'Bayar Online (Midtrans)';
+        case 'cod': return 'Bayar di Tempat (COD)';
+        default: return method;
+    }
 };
 
 export default function OrderDetailsScreen() {
     const router = useRouter();
-    const params = useLocalSearchParams();
-    const orderId = (params.orderId as string) || 'GC092921';
-    const productName = (params.productName as string) || 'Jeka Jacket';
+    const params = useLocalSearchParams<{ orderId: string }>();
+    const [order, setOrder] = useState<OrderData | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchOrder();
+    }, []);
+
+    const fetchOrder = async () => {
+        const token = await AsyncStorage.getItem('token');
+        if (!token || !params.orderId) {
+            setLoading(false);
+            return;
+        }
+        try {
+            const res = await fetch(`${API_URL}/orders/${params.orderId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.success && data.data) {
+                const orderData = data.data;
+                setOrder(orderData);
+
+                // Auto-verify if order is still waiting_payment with midtrans
+                if (orderData.status === 'waiting_payment' && orderData.payment_method === 'midtrans') {
+                    try {
+                        const verifyRes = await fetch(`${API_URL}/payment/${orderData.id}/verify`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                        const verifyData = await verifyRes.json();
+                        if (verifyData.success && verifyData.data?.status && verifyData.data.status !== 'waiting_payment') {
+                            // Re-fetch order to get updated data
+                            const refreshRes = await fetch(`${API_URL}/orders/${params.orderId}`, {
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+                            const refreshData = await refreshRes.json();
+                            if (refreshData.success && refreshData.data) {
+                                setOrder(refreshData.data);
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[AutoVerify] error', e);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch order', e);
+        }
+        setLoading(false);
+    };
+
+    const handlePayNow = async () => {
+        if (!order) return;
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${API_URL}/payment/${order.id}/token`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.data?.redirect_url) {
+                router.push({
+                    pathname: '/payment-webview',
+                    params: {
+                        url: data.data.redirect_url,
+                        orderId: String(order.id),
+                        orderNumber: order.order_number,
+                    },
+                });
+            } else {
+                Alert.alert('Error', 'Gagal mendapatkan link pembayaran');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Gagal terhubung ke server');
+        }
+    };
+
+    // Determine timeline progress
+    const getTimelineStatus = (step: string) => {
+        if (!order) return 'pending';
+        const orderIdx = TIMELINE_STEPS.indexOf(order.status);
+        const stepIdx = TIMELINE_STEPS.indexOf(step);
+        if (order.status === 'cancelled') return step === 'waiting_payment' ? 'completed' : 'pending';
+        if (stepIdx < orderIdx) return 'completed';
+        if (stepIdx === orderIdx) return 'current';
+        return 'pending';
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
+
+    if (!order) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="receipt-outline" size={48} color={Colors.gray} />
+                <Text style={styles.emptyText}>Order tidak ditemukan</Text>
+                <TouchableOpacity style={styles.backBtnAlt} onPress={() => router.back()}>
+                    <Text style={styles.backBtnAltText}>Kembali</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    const statusInfo = STATUS_MAP[order.status] || { label: order.status, color: Colors.gray };
 
     return (
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => router.back()}
-                >
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={22} color={Colors.white} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Order Details</Text>
+                <Text style={styles.headerTitle}>Detail Pesanan</Text>
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView
-                style={styles.body}
-                contentContainerStyle={styles.bodyContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Order ID */}
-                <Text style={styles.orderId}>#Order ID {orderId}</Text>
-
-                {/* Product Card */}
-                <View style={styles.productCard}>
-                    <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&h=500&fit=crop' }}
-                        style={styles.productImage}
-                    />
-                    <View style={styles.productInfo}>
-                        <View style={styles.productHeader}>
-                            <Text style={styles.productName}>{productName}</Text>
-                            <TouchableOpacity>
-                                <Text style={styles.removeText}>REMOVE</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={styles.productVariant}>Size: S, Color: Green</Text>
-                        <View style={styles.priceRow}>
-                            <Text style={styles.productPrice}>$12</Text>
-                            <View style={styles.qtyControls}>
-                                <TouchableOpacity style={styles.qtyBtn}>
-                                    <Ionicons
-                                        name="remove"
-                                        size={14}
-                                        color={Colors.primaryText}
-                                    />
-                                </TouchableOpacity>
-                                <Text style={styles.qtyText}>1</Text>
-                                <TouchableOpacity style={styles.qtyBtn}>
-                                    <Ionicons
-                                        name="add"
-                                        size={14}
-                                        color={Colors.primaryText}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+            <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+                {/* Order ID + Status */}
+                <View style={styles.orderIdRow}>
+                    <Text style={styles.orderId}>#{order.order_number}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '18' }]}>
+                        <Text style={[styles.statusText, { color: statusInfo.color }]}>{statusInfo.label}</Text>
                     </View>
                 </View>
 
+                {/* Product Items */}
+                {order.items.map((item) => (
+                    <View key={item.id} style={styles.productCard}>
+                        <Image
+                            source={{ uri: item.product?.image_url || item.product?.images?.[0]?.url || 'https://via.placeholder.com/100' }}
+                            style={styles.productImage}
+                        />
+                        <View style={styles.productInfo}>
+                            <Text style={styles.productName} numberOfLines={2}>{item.product?.name || 'Produk'}</Text>
+                            {item.variant_info ? <Text style={styles.productVariant}>{item.variant_info}</Text> : null}
+                            <View style={styles.priceRow}>
+                                <Text style={styles.productPrice}>{formatRupiah(item.price)}</Text>
+                                <Text style={styles.productQty}>x{item.quantity}</Text>
+                            </View>
+                        </View>
+                    </View>
+                ))}
+
                 {/* Status Timeline */}
                 <View style={styles.timelineSection}>
-                    <Text style={styles.sectionTitle}>Order Status</Text>
+                    <Text style={styles.sectionTitle}>Status Pesanan</Text>
                     <View style={styles.timeline}>
-                        {timelineSteps.map((step, index) => (
-                            <View key={index} style={styles.timelineStep}>
-                                {/* Dot + Line */}
-                                <View style={styles.timelineLeft}>
-                                    <View
-                                        style={[
-                                            styles.timelineDot,
-                                            {
-                                                backgroundColor:
-                                                    getStepColor(step.status),
-                                            },
-                                        ]}
-                                    >
-                                        {step.status === 'completed' && (
-                                            <Ionicons
-                                                name="checkmark"
-                                                size={12}
-                                                color={Colors.white}
-                                            />
+                        {TIMELINE_STEPS.map((step, index) => {
+                            const status = getTimelineStatus(step);
+                            const dotColor = status === 'completed' ? '#22C55E' : status === 'current' ? '#F59E0B' : Colors.border;
+                            return (
+                                <View key={step} style={styles.timelineStep}>
+                                    <View style={styles.timelineLeft}>
+                                        <View style={[styles.timelineDot, { backgroundColor: dotColor }]}>
+                                            {status === 'completed' && (
+                                                <Ionicons name="checkmark" size={12} color={Colors.white} />
+                                            )}
+                                        </View>
+                                        {index < TIMELINE_STEPS.length - 1 && (
+                                            <View style={[styles.timelineLine, { backgroundColor: status === 'completed' ? '#22C55E' : Colors.border }]} />
                                         )}
                                     </View>
-                                    {index < timelineSteps.length - 1 && (
-                                        <View
-                                            style={[
-                                                styles.timelineLine,
-                                                {
-                                                    backgroundColor:
-                                                        step.status === 'completed'
-                                                            ? Colors.green
-                                                            : Colors.border,
-                                                },
-                                            ]}
-                                        />
-                                    )}
+                                    <View style={styles.timelineRight}>
+                                        <Text style={[styles.timelineLabel, status === 'pending' && { color: Colors.gray }]}>
+                                            {TIMELINE_LABELS[step]}
+                                        </Text>
+                                        <Text style={styles.timelineDate}>
+                                            {status === 'completed' || status === 'current'
+                                                ? formatDate(order.created_at)
+                                                : '—'
+                                            }
+                                        </Text>
+                                    </View>
                                 </View>
-                                {/* Text */}
-                                <View style={styles.timelineRight}>
-                                    <Text
-                                        style={[
-                                            styles.timelineLabel,
-                                            step.status === 'pending' && {
-                                                color: Colors.gray,
-                                            },
-                                        ]}
-                                    >
-                                        {step.label}
-                                    </Text>
-                                    <Text style={styles.timelineDate}>
-                                        {step.date}
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
                 </View>
 
                 {/* Delivery Info */}
                 <View style={styles.infoSection}>
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Delivery Date</Text>
-                        <Text style={styles.infoValue}>20 March, 5:30 PM</Text>
+                        <Text style={styles.infoLabel}>Pengiriman</Text>
+                        <Text style={styles.infoValue}>{order.courier_name} {order.courier_service}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Delivery Location</Text>
-                        <Text style={styles.infoValue}>
-                            Moon Road, West Subidbazar
+                        <Text style={styles.infoLabel}>Alamat</Text>
+                        <Text style={[styles.infoValue, { flex: 1, textAlign: 'right', marginLeft: 20 }]} numberOfLines={2}>
+                            {order.address?.street ? `${order.address.street}, ${order.address.city}` : 'Alamat tidak tersedia'}
                         </Text>
                     </View>
+                    {order.address?.recipient_name ? (
+                        <>
+                            <View style={styles.divider} />
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Penerima</Text>
+                                <Text style={styles.infoValue}>{order.address.recipient_name} ({order.address.phone})</Text>
+                            </View>
+                        </>
+                    ) : null}
                 </View>
 
                 {/* Payment Method */}
                 <View style={styles.infoSection}>
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Payment Method</Text>
+                        <Text style={styles.infoLabel}>Pembayaran</Text>
                         <View style={styles.paymentInfo}>
                             <Ionicons
-                                name="card"
+                                name={order.payment_method === 'cod' ? 'cash-outline' : 'card'}
                                 size={18}
                                 color={Colors.primaryText}
                             />
-                            <Text style={styles.infoValue}>
-                                Visa **** 4567
-                            </Text>
+                            <Text style={styles.infoValue}>{getPaymentLabel(order.payment_method)}</Text>
                         </View>
                     </View>
                 </View>
 
                 {/* Order Summary */}
                 <View style={styles.summarySection}>
-                    <Text style={styles.sectionTitle}>Order Summary</Text>
+                    <Text style={styles.sectionTitle}>Ringkasan Pesanan</Text>
                     <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Subtotal</Text>
-                        <Text style={styles.summaryValue}>$50.00</Text>
+                        <Text style={styles.summaryValue}>{formatRupiah(order.subtotal)}</Text>
                     </View>
                     <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Shipping Fee</Text>
-                        <Text style={styles.summaryValue}>$5.00</Text>
+                        <Text style={styles.summaryLabel}>Ongkos Kirim</Text>
+                        <Text style={styles.summaryValue}>{formatRupiah(order.shipping_cost)}</Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Coupon Discount</Text>
-                        <Text style={[styles.summaryValue, { color: Colors.green }]}>
-                            -$5.00
-                        </Text>
-                    </View>
+                    {order.discount > 0 && (
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Diskon</Text>
+                            <Text style={[styles.summaryValue, { color: Colors.green }]}>
+                                -{formatRupiah(order.discount)}
+                            </Text>
+                        </View>
+                    )}
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryRow}>
-                        <Text style={styles.totalLabel}>Total Cost</Text>
-                        <Text style={styles.totalValue}>$50.00</Text>
+                        <Text style={styles.totalLabel}>Total</Text>
+                        <Text style={styles.totalValue}>{formatRupiah(order.total)}</Text>
                     </View>
                 </View>
 
-                {/* Buttons */}
+                {/* Action Buttons */}
                 <View style={styles.buttonGroup}>
-                    <TouchableOpacity
-                        style={styles.reorderButton}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.reorderButtonText}>Reorder</Text>
-                    </TouchableOpacity>
+                    {order.status === 'waiting_payment' && order.payment_method === 'midtrans' && (
+                        <TouchableOpacity style={styles.payButton} onPress={handlePayNow} activeOpacity={0.8}>
+                            <Ionicons name="card" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                            <Text style={styles.payButtonText}>Bayar Sekarang</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         style={styles.trackButton}
                         onPress={() => router.push('/track-order')}
                         activeOpacity={0.8}
                     >
                         <Ionicons name="location" size={18} color={Colors.primary} />
-                        <Text style={styles.trackButtonText}>Track Order</Text>
+                        <Text style={styles.trackButtonText}>Lacak Pesanan</Text>
                     </TouchableOpacity>
+                    {order.status === 'delivered' && (
+                        <TouchableOpacity
+                            style={[styles.trackButton, { borderColor: '#EF4444' }]}
+                            onPress={() => router.push({
+                                pathname: '/return-request',
+                                params: {
+                                    orderId: String(order.id),
+                                    orderNumber: order.order_number,
+                                    productName: order.items?.[0]?.product?.name || 'Produk',
+                                    total: String(order.total),
+                                },
+                            })}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="arrow-undo" size={18} color="#EF4444" />
+                            <Text style={[styles.trackButtonText, { color: '#EF4444' }]}>Ajukan Pengembalian</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </ScrollView>
         </View>
@@ -289,11 +432,25 @@ const styles = StyleSheet.create({
         padding: Spacing.xxl,
         paddingBottom: 40,
     },
+    orderIdRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: Spacing.lg,
+    },
     orderId: {
         fontFamily: 'Inter_500Medium',
         fontSize: FontSize.sm,
         color: Colors.secondaryText,
-        marginBottom: Spacing.lg,
+    },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    statusText: {
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: FontSize.xs,
     },
     // Product Card
     productCard: {
@@ -301,7 +458,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.lightGray,
         borderRadius: BorderRadius.lg,
         padding: Spacing.lg,
-        marginBottom: Spacing.xxl,
+        marginBottom: Spacing.md,
     },
     productImage: {
         width: 72,
@@ -312,28 +469,19 @@ const styles = StyleSheet.create({
     },
     productInfo: {
         flex: 1,
-    },
-    productHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 4,
+        justifyContent: 'center',
     },
     productName: {
         fontFamily: 'Inter_600SemiBold',
         fontSize: FontSize.md,
         color: Colors.primaryText,
-    },
-    removeText: {
-        fontFamily: 'Inter_500Medium',
-        fontSize: FontSize.xs,
-        color: Colors.red,
+        marginBottom: 4,
     },
     productVariant: {
         fontFamily: 'Inter_400Regular',
         fontSize: FontSize.sm,
         color: Colors.secondaryText,
-        marginBottom: 8,
+        marginBottom: 4,
     },
     priceRow: {
         flexDirection: 'row',
@@ -342,31 +490,17 @@ const styles = StyleSheet.create({
     },
     productPrice: {
         fontFamily: 'Inter_700Bold',
-        fontSize: FontSize.lg,
-        color: Colors.primaryText,
-    },
-    qtyControls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    qtyBtn: {
-        width: 28,
-        height: 28,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: Colors.white,
-    },
-    qtyText: {
-        fontFamily: 'Inter_500Medium',
         fontSize: FontSize.md,
         color: Colors.primaryText,
     },
+    productQty: {
+        fontFamily: 'Inter_500Medium',
+        fontSize: FontSize.sm,
+        color: Colors.secondaryText,
+    },
     // Timeline
     timelineSection: {
+        marginTop: Spacing.lg,
         marginBottom: Spacing.xxl,
     },
     sectionTitle: {
@@ -487,13 +621,15 @@ const styles = StyleSheet.create({
     buttonGroup: {
         gap: Spacing.md,
     },
-    reorderButton: {
-        backgroundColor: Colors.primary,
+    payButton: {
+        flexDirection: 'row',
+        backgroundColor: '#22C55E',
         paddingVertical: 16,
         borderRadius: BorderRadius.xl,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    reorderButtonText: {
+    payButtonText: {
         fontFamily: 'Inter_600SemiBold',
         fontSize: FontSize.lg,
         color: Colors.white,
@@ -513,5 +649,23 @@ const styles = StyleSheet.create({
         fontFamily: 'Inter_600SemiBold',
         fontSize: FontSize.lg,
         color: Colors.primary,
+    },
+    emptyText: {
+        fontFamily: 'Inter_500Medium',
+        fontSize: FontSize.lg,
+        color: Colors.gray,
+        marginTop: Spacing.lg,
+    },
+    backBtnAlt: {
+        marginTop: Spacing.xl,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: Spacing.xxl,
+        paddingVertical: Spacing.md,
+        borderRadius: BorderRadius.lg,
+    },
+    backBtnAltText: {
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: FontSize.md,
+        color: Colors.white,
     },
 });

@@ -4,6 +4,7 @@ interface Props {
     lat: number;
     lng: number;
     mapRef: React.RefObject<any>;
+    onRegionChangeComplete?: (region: any) => void;
 }
 
 declare const MapComponent: React.FC<Props>;

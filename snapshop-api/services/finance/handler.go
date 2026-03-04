@@ -268,6 +268,13 @@ func (h *ReturnHandler) CreateReturn(c *gin.Context) {
 		return
 	}
 
+	// Check if return already exists for this order
+	var existingReturn models.Return
+	if err := database.DB.Where("order_id = ?", input.OrderID).First(&existingReturn).Error; err == nil {
+		utils.BadRequest(c, "Return request already exists for this order")
+		return
+	}
+
 	ret := models.Return{
 		OrderID:      input.OrderID,
 		UserID:       userID,
@@ -277,6 +284,10 @@ func (h *ReturnHandler) CreateReturn(c *gin.Context) {
 		Photos:       input.Photos,
 	}
 	database.DB.Create(&ret)
+
+	// Update order status to returned
+	database.DB.Model(&order).Update("status", models.OrderReturned)
+
 	utils.Created(c, ret)
 }
 
