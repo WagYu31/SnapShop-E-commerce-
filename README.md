@@ -460,25 +460,36 @@ The backend uses **20+ models** with GORM auto-migration:
 
 ---
 
-## Screenshots
+## Demo
 
-### Mobile App
-- Onboarding, Login, Register
-- Home with categories & banners
-- Product search & filters
-- Product detail with variants
-- Shopping cart & checkout
-- Order tracking & history
-- User profile with dark mode
+### 📱 Mobile App Demo (iOS Simulator)
 
-### Admin Dashboard
+https://github.com/user-attachments/assets/snapshop-mobile-demo
+
+<video src="demo/snapshop_mobile_demo.mp4" controls width="300"></video>
+
+> *Recorded on iPhone 17 Pro Simulator — iOS 26.2*
+
+**Screens shown:**
+- 🏠 Home — Banner carousel, categories, product grid
+- 🔍 Search — Product search & filters
+- 📦 Product Detail — Variants, reviews, add to cart
+- 🛒 Cart — Quantity management, checkout
+- ❤️ Wishlist — Saved items
+- 👤 Profile — User account, edit profile
+- 🔐 Change Password — Password strength indicator
+- 📍 Addresses — Delivery address management
+
+### 🖥️ Admin Dashboard
 - Premium dark theme
 - Role-based sidebar navigation
-- Real-time dashboard stats
+- Real-time dashboard stats with revenue trend chart
 - Product management with CRUD
 - Order management with status flow
 - Warehouse stock with FIFO batches
 - ERP modules (Reports, Finance, CRM)
+- 🛡️ Security & Audit dashboard
+- 🔐 Password Management for staff
 
 ---
 
