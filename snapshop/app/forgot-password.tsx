@@ -4,15 +4,32 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
+    TextInput,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, BorderRadius } from '../constants/theme';
 import AnimatedButton from '../components/AnimatedButton';
+import FadeInView from '../components/FadeInView';
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
-    const [selectedMethod, setSelectedMethod] = useState<'email' | 'phone'>('email');
+    const [email, setEmail] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = () => {
+        if (!email || !email.includes('@')) {
+            Alert.alert('Error', 'Masukkan email yang valid');
+            return;
+        }
+        // Show success message (actual email sending would require backend SMTP)
+        Alert.alert(
+            'Email Terkirim! ✉️',
+            `Link reset password telah dikirim ke ${email}. Silakan cek inbox Anda.`,
+            [{ text: 'OK', onPress: () => router.back() }]
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -24,66 +41,61 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <View style={styles.content}>
-                <Text style={styles.title}>Forgot Password</Text>
-                <Text style={styles.description}>
-                    Don't worry! It happens. Please select your email or phone number so we can send you a code.
-                </Text>
-
-                {/* Email Option */}
-                <TouchableOpacity
-                    style={[
-                        styles.optionCard,
-                        selectedMethod === 'email' && styles.optionCardSelected,
-                    ]}
-                    onPress={() => setSelectedMethod('email')}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.optionIcon}>
-                        <Ionicons name="mail" size={24} color={Colors.primaryText} />
-                    </View>
-                    <View style={styles.optionInfo}>
-                        <Text style={styles.optionLabel}>Email</Text>
-                        <Text style={styles.optionValue}>Your email: *****dyne@mail.com</Text>
-                    </View>
-                    {selectedMethod === 'email' && (
-                        <View style={styles.checkCircle}>
-                            <Ionicons name="checkmark" size={14} color={Colors.white} />
+                <FadeInView delay={0}>
+                    <View style={styles.iconSection}>
+                        <View style={styles.lockIcon}>
+                            <Ionicons name="lock-open-outline" size={40} color={Colors.primary} />
                         </View>
-                    )}
-                </TouchableOpacity>
+                    </View>
+                </FadeInView>
 
-                {/* Phone Option */}
-                <TouchableOpacity
-                    style={[
-                        styles.optionCard,
-                        selectedMethod === 'phone' && styles.optionCardSelected,
-                    ]}
-                    onPress={() => setSelectedMethod('phone')}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.optionIcon}>
-                        <Ionicons name="call" size={24} color={Colors.primaryText} />
-                    </View>
-                    <View style={styles.optionInfo}>
-                        <Text style={styles.optionLabel}>Phone Number</Text>
-                        <Text style={styles.optionValue}>Your phone: ********4566</Text>
-                    </View>
-                    {selectedMethod === 'phone' && (
-                        <View style={styles.checkCircle}>
-                            <Ionicons name="checkmark" size={14} color={Colors.white} />
+                <FadeInView delay={100}>
+                    <Text style={styles.title}>Forgot Password</Text>
+                    <Text style={styles.description}>
+                        Enter your email address and we'll send you a link to reset your password.
+                    </Text>
+                </FadeInView>
+
+                {/* Email Input */}
+                <FadeInView delay={200}>
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Email Address</Text>
+                        <View style={styles.inputContainer}>
+                            <Ionicons name="mail-outline" size={20} color={Colors.gray} style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Enter your email"
+                                placeholderTextColor={Colors.gray}
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
                         </View>
-                    )}
-                </TouchableOpacity>
+                    </View>
+                </FadeInView>
             </View>
 
-            {/* Next Button */}
+            {/* Submit Button */}
             <View style={styles.bottomContainer}>
-                <AnimatedButton
-                    onPress={() => router.push('/verify-phone' as any)}
-                    title="Next"
-                    style={styles.nextButton}
-                    textStyle={styles.nextButtonText}
-                />
+                <FadeInView delay={300}>
+                    <AnimatedButton
+                        onPress={handleSubmit}
+                        title={loading ? 'Sending...' : 'Send Reset Link'}
+                        style={styles.submitButton}
+                        textStyle={styles.submitButtonText}
+                    />
+                </FadeInView>
+                <FadeInView delay={400}>
+                    <TouchableOpacity
+                        style={styles.backToLogin}
+                        onPress={() => router.back()}
+                    >
+                        <Ionicons name="arrow-back" size={16} color={Colors.primary} />
+                        <Text style={styles.backToLoginText}>Back to Sign In</Text>
+                    </TouchableOpacity>
+                </FadeInView>
             </View>
         </View>
     );
@@ -108,6 +120,18 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: Spacing.xxl,
     },
+    iconSection: {
+        alignItems: 'center',
+        marginBottom: Spacing.xxl,
+    },
+    lockIcon: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.lightGray,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     title: {
         fontFamily: 'Inter_700Bold',
         fontSize: FontSize.h2,
@@ -121,62 +145,59 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         marginBottom: Spacing.xxxl,
     },
-    optionCard: {
+    inputGroup: {
+        marginBottom: Spacing.xl,
+    },
+    inputLabel: {
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: FontSize.sm,
+        color: Colors.primaryText,
+        marginBottom: Spacing.sm,
+    },
+    inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: Spacing.xl,
-        borderRadius: BorderRadius.lg,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        marginBottom: Spacing.lg,
-    },
-    optionCardSelected: {
-        borderColor: Colors.primary,
-    },
-    optionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
         backgroundColor: Colors.lightGray,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: Spacing.lg,
+        borderRadius: BorderRadius.lg,
+        paddingHorizontal: Spacing.lg,
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
-    optionInfo: {
+    inputIcon: {
+        marginRight: Spacing.sm,
+    },
+    input: {
         flex: 1,
-    },
-    optionLabel: {
-        fontFamily: 'Inter_600SemiBold',
+        fontFamily: 'Inter_400Regular',
         fontSize: FontSize.md,
         color: Colors.primaryText,
-        marginBottom: 4,
-    },
-    optionValue: {
-        fontFamily: 'Inter_400Regular',
-        fontSize: FontSize.sm,
-        color: Colors.secondaryText,
-    },
-    checkCircle: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: Colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
+        paddingVertical: Spacing.lg,
     },
     bottomContainer: {
         paddingHorizontal: Spacing.xxl,
         paddingBottom: 40,
     },
-    nextButton: {
+    submitButton: {
         backgroundColor: Colors.primary,
         paddingVertical: Spacing.lg,
         borderRadius: BorderRadius.xl,
         alignItems: 'center',
     },
-    nextButtonText: {
+    submitButtonText: {
         fontFamily: 'Inter_600SemiBold',
         fontSize: FontSize.lg,
         color: Colors.white,
+    },
+    backToLogin: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        marginTop: Spacing.xl,
+    },
+    backToLoginText: {
+        fontFamily: 'Inter_500Medium',
+        fontSize: FontSize.md,
+        color: Colors.primary,
     },
 });

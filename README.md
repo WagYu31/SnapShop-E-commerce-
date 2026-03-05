@@ -462,45 +462,25 @@ The backend uses **20+ models** with GORM auto-migration:
 
 ---
 
-## Screenshots
+## Demo
 
 ### 📱 Mobile App (Customer)
 
-> *iPhone 17 Pro — iOS 26.2*
+> *Recorded on iPhone 17 Pro Simulator — iOS 26.2*
 
-#### Onboarding & Auth
-| Onboarding | Login | Sign Up | Forgot Password |
-|:---:|:---:|:---:|:---:|
-| ![Onboarding](demo/screenshots/01_onboarding.png) | ![Login](demo/screenshots/02_login.png) | ![Sign Up](demo/screenshots/03_signup.png) | ![Forgot Password](demo/screenshots/04_forgot_password.png) |
+https://github.com/WagYu31/SnapShop-E-commerce-/raw/main/demo/snapshop_mobile_demo.mp4
 
-#### Shopping
-| Home | Search | Product Detail | Cart |
-|:---:|:---:|:---:|:---:|
-| ![Home](demo/screenshots/05_home.png) | ![Search](demo/screenshots/06_search.png) | ![Product Detail](demo/screenshots/07_product_detail.png) | ![Cart](demo/screenshots/08_cart.png) |
-
-#### Orders & Wishlist
-| Checkout | Order History | Wishlist |
-|:---:|:---:|:---:|
-| ![Checkout](demo/screenshots/09_checkout.png) | ![Orders](demo/screenshots/10_orders.png) | ![Wishlist](demo/screenshots/11_wishlist.png) |
-
-#### Profile & Settings
-| Profile | Edit Profile | Change Password |
-|:---:|:---:|:---:|
-| ![Profile](demo/screenshots/12_profile.png) | ![Edit Profile](demo/screenshots/13_edit_profile.png) | ![Change Password](demo/screenshots/14_change_password.png) |
+**Features shown:** Onboarding, Login, Sign Up, Home, Product Search, Product Detail, Cart, Checkout, Wishlist, Profile, Edit Profile, Change Password
 
 ---
 
-### 🖥️ Admin Dashboard
+### 🖥️ Admin Dashboard (SuperAdmin)
 
-> *Premium dark theme — SuperAdmin view*
+> *Premium dark theme — Full admin walkthrough*
 
-| Dashboard | Products | Orders |
-|:---:|:---:|:---:|
-| ![Dashboard](demo/screenshots/admin_01_dashboard.png) | ![Products](demo/screenshots/admin_02_products.png) | ![Orders](demo/screenshots/admin_03_orders.png) |
+https://github.com/WagYu31/SnapShop-E-commerce-/raw/main/demo/snapshop_admin_demo.mp4
 
-| User Management | Audit & Security | Sales Report |
-|:---:|:---:|:---:|
-| ![Users](demo/screenshots/admin_04_users.png) | ![Audit](demo/screenshots/admin_05_audit.png) | ![Sales](demo/screenshots/admin_06_sales.png) |
+**Features shown:** Dashboard, Products, Orders, Vouchers, Returns, Stock, Procurement, Reports, P&L, CRM, Store Locations, User Management, Audit & Security
 
 ---
 
